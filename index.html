@@ -8,19 +8,28 @@
 </head>
 <body>
 
+    <!-- NAVBAR -->
     <nav class="navbar">
         <div class="logo">RAILWAY</div>
-        <div class="nav-links">
+
+        <button class="menu-toggle" id="menuToggle" type="button"
+                aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <div class="nav-links" id="navLinks">
             <a href="#home">Home</a>
             <a href="#schedules">Train Schedules</a>
             <a href="#booking">Book Ticket</a>
-            <a href="#booking">Book Ticket</a>
             <a href="#myBookings">My Bookings</a>
-            <a href="#admin">Admin Dashboard</a>
             <a href="#passengerAccount">Login / Register</a>
+            <a href="#admin">Admin Dashboard</a>
         </div>
     </nav>
 
+    <!-- HERO -->
     <section class="hero" id="home">
         <div class="hero-content">
             <h1>Travel Smart.<br>Travel by Train.</h1>
@@ -29,6 +38,7 @@
         </div>
     </section>
 
+    <!-- SCHEDULES -->
     <section class="schedules" id="schedules">
         <h2>Available Train Schedules</h2>
         <p>Explore available trains and choose your journey.</p>
@@ -37,22 +47,23 @@
         </div>
     </section>
 
+    <!-- BOOKING -->
     <section class="booking" id="booking">
         <h2>Book Your Ticket</h2>
 
         <form id="bookingForm">
-            <label>Passenger Name</label>
+            <label for="passengerName">Passenger Name</label>
             <input type="text" id="passengerName" required>
 
-            <label>Email Address</label>
+            <label for="passengerEmail">Email Address</label>
             <input type="email" id="passengerEmail" required>
 
-            <label>Select Train Schedule</label>
+            <label for="scheduleSelect">Select Train Schedule</label>
             <select id="scheduleSelect" required>
                 <option value="">Select a schedule</option>
             </select>
 
-            <label>Select Available Seat</label>
+            <label for="seatSelect">Select Available Seat</label>
             <select id="seatSelect" required>
                 <option value="">Select a seat</option>
             </select>
@@ -61,235 +72,225 @@
             <p id="bookingMessage"></p>
         </form>
     </section>
-<!-- PASSENGER AUTHENTICATION -->
-<section class="auth-section" id="passengerAccount">
 
-    <h2>Passenger Account</h2>
-    <p>Register or login to your railway account.</p>
+    <!-- PASSENGER AUTH -->
+    <section class="auth-section" id="passengerAccount">
+        <h2>Passenger Account</h2>
+        <p>Register or login to your railway account.</p>
 
-    <div id="authForms">
+        <div id="authForms">
+            <div class="auth-form-box">
+                <h3>Create Account</h3>
 
-        <div class="auth-form-box">
-            <h3>Create Account</h3>
+                <form id="passengerRegisterForm">
+                    <label for="registerName">Full Name</label>
+                    <input type="text" id="registerName" placeholder="Enter your full name" required>
 
-            <form id="passengerRegisterForm">
-                <label>Full Name</label>
-                <input type="text" id="registerName"
-                       placeholder="Enter your full name" required>
+                    <label for="registerEmail">Email Address</label>
+                    <input type="email" id="registerEmail" placeholder="Enter your email" required>
 
-                <label>Email Address</label>
-                <input type="email" id="registerEmail"
-                       placeholder="Enter your email" required>
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" placeholder="Minimum 8 characters" minlength="8" required>
 
-                <label>Password</label>
-                <input type="password" id="registerPassword"
-                       placeholder="Minimum 8 characters"
-                       minlength="8" required>
+                    <button type="submit">Register</button>
+                </form>
 
-                <button type="submit">Register</button>
+                <p id="registerMessage"></p>
+            </div>
+
+            <div class="auth-form-box">
+                <h3>Login</h3>
+
+                <form id="passengerLoginForm">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="Enter your email" required>
+
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password" required>
+
+                    <button type="submit">Login</button>
+                </form>
+
+                <p id="loginMessage"></p>
+            </div>
+        </div>
+
+        <div id="loggedInPanel" style="display:none;">
+            <h3>Welcome, <span id="loggedInName"></span>!</h3>
+            <p>You are logged in.</p>
+            <button type="button" id="passengerLogoutBtn">Logout</button>
+        </div>
+    </section>
+
+    <!-- MY BOOKINGS -->
+    <section class="my-bookings" id="myBookings">
+        <h2>My Bookings</h2>
+        <p>Login and press the button to view your ticket history.</p>
+
+        <div class="booking-search">
+            <input type="email" id="searchEmail" placeholder="Your registered email">
+            <button type="button" id="searchBookingsBtn">Search Bookings</button>
+        </div>
+
+        <div id="myBookingsList">
+            <p>Your bookings will appear here.</p>
+        </div>
+    </section>
+
+    <!-- ADMIN -->
+    <section class="admin-section" id="admin">
+        <h2>Admin Dashboard</h2>
+        <p>Railway Management System Overview</p>
+
+        <!-- ADMIN LOGIN -->
+        <div id="adminAuthBox" class="auth-form-box">
+            <h3>Admin Login</h3>
+
+            <form id="adminLoginForm">
+                <label for="adminEmail">Admin Email</label>
+                <input type="email" id="adminEmail" placeholder="Enter admin email" required>
+
+                <label for="adminPassword">Password</label>
+                <input type="password" id="adminPassword" placeholder="Enter admin password" required>
+
+                <button type="submit">Admin Login</button>
             </form>
 
-            <p id="registerMessage"></p>
+            <p id="adminLoginMessage"></p>
         </div>
 
-        <div class="auth-form-box">
-            <h3>Login</h3>
+        <!-- ADMIN PANEL -->
+        <div id="adminPanel" style="display:none;">
 
-            <form id="passengerLoginForm">
-                <label>Email Address</label>
-                <input type="email" id="loginEmail"
-                       placeholder="Enter your email" required>
+            <h3>Welcome, Railway Admin!</h3>
+            <div class="admin-actions">
+                <button type="button" id="loadAdminBtn" class="admin-load-btn">Load Dashboard</button>
+                <button type="button" id="adminLogoutBtn">Admin Logout</button>
+            </div>
 
-                <label>Password</label>
-                <input type="password" id="loginPassword"
-                       placeholder="Enter your password" required>
+            <div id="adminStats" class="admin-stats">
+                <p>Click Load Dashboard to view statistics.</p>
+            </div>
 
-                <button type="submit">Login</button>
-            </form>
+            <h3 class="admin-bookings-heading">All Passenger Bookings</h3>
 
-            <p id="loginMessage"></p>
+            <div id="adminBookings" class="admin-bookings">
+                <p>Booking records will appear here.</p>
+            </div>
+
+            <!-- TRAIN MANAGEMENT -->
+            <div class="train-management">
+                <h3>Train Management</h3>
+                <p>Add, update or delete railway trains.</p>
+
+                <form id="trainForm">
+                    <input type="hidden" id="editTrainId">
+
+                    <label for="trainName">Train Name</label>
+                    <input type="text" id="trainName" placeholder="Enter train name" required>
+
+                    <label for="trainNumber">Train Number</label>
+                    <input type="text" id="trainNumber" placeholder="Example: GL101" required>
+
+                    <label for="totalSeats">Total Seats</label>
+                    <input type="number" id="totalSeats" min="1" placeholder="Enter total seats" required>
+
+                    <div class="form-actions">
+                        <button type="submit" id="saveTrainBtn">Add Train</button>
+                        <button type="button" id="resetTrainBtn">Clear Form</button>
+                    </div>
+                </form>
+
+                <p id="trainMessage"></p>
+
+                <div class="list-heading">
+                    <h4>Existing Trains</h4>
+                    <button type="button" id="loadTrainsBtn">Load Trains</button>
+                </div>
+
+                <div id="trainRecords">
+                    <p>Click Load Trains to view records.</p>
+                </div>
+            </div>
+
+            <!-- SCHEDULE MANAGEMENT -->
+            <div class="schedule-management">
+                <h3>Schedule Management</h3>
+                <p>Add, edit and manage railway schedules.</p>
+
+                <form id="scheduleManagementForm">
+                    <input type="hidden" id="managementScheduleId">
+
+                    <div class="schedule-form-grid">
+                        <input type="number" id="managementTrainId" placeholder="Train ID" min="1" required>
+                        <input type="number" id="managementSourceId" placeholder="Source Station ID" min="1" required>
+                        <input type="number" id="managementDestinationId" placeholder="Destination Station ID" min="1" required>
+
+                        <label>
+                            Departure Time
+                            <input type="datetime-local" id="managementDeparture" required>
+                        </label>
+
+                        <label>
+                            Arrival Time
+                            <input type="datetime-local" id="managementArrival" required>
+                        </label>
+
+                        <input type="number" id="managementFare" placeholder="Ticket Fare" min="0" step="0.01" required>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="managementSaveBtn">Add Schedule</button>
+                        <button type="button" id="managementClearBtn">Clear Form</button>
+                    </div>
+
+                    <p id="managementScheduleMessage"></p>
+                </form>
+
+                <div class="list-heading">
+                    <h4>Existing Schedules</h4>
+                    <button type="button" id="managementLoadBtn">Load Schedules</button>
+                </div>
+
+                <div id="managementScheduleRecords">
+                    <p>Click Load Schedules to view records.</p>
+                </div>
+            </div>
+
+            <!-- STATION MANAGEMENT -->
+            <div class="station-management">
+                <h3>Station Management</h3>
+                <p>Add, update or delete railway stations.</p>
+
+                <form id="stationForm">
+                    <input type="hidden" id="editStationId">
+
+                    <label for="stationName">Station Name</label>
+                    <input type="text" id="stationName" placeholder="Enter station name" required>
+
+                    <label for="stationCity">City</label>
+                    <input type="text" id="stationCity" placeholder="Enter city" required>
+
+                    <div class="form-actions">
+                        <button type="submit" id="saveStationBtn">Add Station</button>
+                        <button type="button" id="resetStationBtn">Clear Form</button>
+                    </div>
+                </form>
+
+                <p id="stationMessage"></p>
+
+                <div class="list-heading">
+                    <h4>Existing Stations</h4>
+                    <button type="button" id="loadStationsBtn">Load Stations</button>
+                </div>
+
+                <div id="stationRecords">
+                    <p>Click Load Stations to view records.</p>
+                </div>
+            </div>
+
         </div>
-
-    </div>
-
-    <div id="loggedInPanel" style="display:none;">
-        <h3>Welcome, <span id="loggedInName"></span>!</h3>
-        <p>You are logged in.</p>
-        <button type="button" id="passengerLogoutBtn">Logout</button>
-    </div>
-
-</section>
-<section class="my-bookings" id="myBookings">
-    <h2>My Bookings</h2>
-    <p>Enter your email to view your ticket history.</p>
-
-    <div class="booking-search">
-        <input
-            type="email"
-            id="searchEmail"
-            placeholder="Enter your registered email"
-            required
-        >
-        <button type="button" id="searchBookingsBtn">
-            Search Bookings
-        </button>
-    </div>
-
-    <div id="myBookingsList">
-        <p>Your bookings will appear here.</p>
-    </div>
-</section>
-
-<section class="admin-section" id="admin">
-    <h2>Admin Dashboard</h2>
-    <p>Railway Management System Overview</p>
-<!-- ADMIN LOGIN -->
-<div id="adminAuthBox" class="auth-form-box">
-    <h3>Admin Login</h3>
-
-    <form id="adminLoginForm">
-        <label>Admin Email</label>
-        <input type="email" id="adminEmail"
-               placeholder="Enter admin email" required>
-
-        <label>Password</label>
-        <input type="password" id="adminPassword"
-               placeholder="Enter admin password" required>
-
-        <button type="submit">Admin Login</button>
-    </form>
-
-    <p id="adminLoginMessage"></p>
-</div>
-
-<!-- ADMIN PANEL -->
-<div id="adminPanel" style="display:none;">
-
-    <h3>Welcome, Railway Admin!</h3>
-    <button type="button" id="adminLogoutBtn">Admin Logout</button>
-    <button id="loadAdminBtn" class="admin-load-btn">
-        Load Dashboard
-    </button>
-
-    <div id="adminStats" class="admin-stats">
-        <p>Click Load Dashboard to view statistics.</p>
-    </div>
-
-    <h3 class="admin-bookings-heading">All Passenger Bookings</h3>
-
-    <div id="adminBookings" class="admin-bookings">
-        <p>Booking records will appear here.</p>
-    </div>
-    <div class="train-management">
-    <h3>Train Management</h3>
-    <p>Add, update or delete railway trains.</p>
-
-    <form id="trainForm">
-        <input type="hidden" id="editTrainId">
-
-        <label>Train Name</label>
-        <input type="text" id="trainName" placeholder="Enter train name" required>
-
-        <label>Train Number</label>
-        <input type="text" id="trainNumber" placeholder="Example: GL101" required>
-
-        <label>Total Seats</label>
-        <input type="number" id="totalSeats" min="1" placeholder="Enter total seats" required>
-
-        <button type="submit" id="saveTrainBtn">Add Train</button>
-        <button type="button" id="resetTrainBtn">Clear Form</button>
-    </form>
-
-    <p id="trainMessage"></p>
-
-    <div id="trainRecords">
-        <p>Click Load Trains to view records.</p>
-    </div>
-
-    <button type="button" id="loadTrainsBtn">Load Trains</button>
-</div>
-<!-- SCHEDULE MANAGEMENT -->
-<section class="schedule-management">
-    <h2>Schedule Management</h2>
-    <p>Add, edit and manage railway schedules.</p>
-
-    <form id="scheduleManagementForm">
-        <input type="hidden" id="managementScheduleId">
-
-        <div class="schedule-form-grid">
-            <input type="number" id="managementTrainId"
-                   placeholder="Train ID" min="1" required>
-
-            <input type="number" id="managementSourceId"
-                   placeholder="Source Station ID" min="1" required>
-
-            <input type="number" id="managementDestinationId"
-                   placeholder="Destination Station ID" min="1" required>
-
-            <label>
-                Departure Time
-                <input type="datetime-local" id="managementDeparture" required>
-            </label>
-
-            <label>
-                Arrival Time
-                <input type="datetime-local" id="managementArrival" required>
-            </label>
-
-            <input type="number" id="managementFare"
-                   placeholder="Ticket Fare" min="0" step="0.01" required>
-        </div>
-
-        <div class="schedule-form-actions">
-            <button type="submit" id="managementSaveBtn">Add Schedule</button>
-            <button type="button" id="managementClearBtn">Clear Form</button>
-        </div>
-
-        <p id="managementScheduleMessage"></p>
-    </form>
-
-    <div class="schedule-list-heading">
-        <h3>Existing Schedules</h3>
-        <button type="button" id="managementLoadBtn">Load Schedules</button>
-    </div>
-
-    <div id="managementScheduleRecords">
-        <p>Click Load Schedules to view records.</p>
-    </div>
-    <!-- STATION MANAGEMENT -->
-<section class="station-management">
-
-    <h2>Station Management</h2>
-    <p>Add, update or delete railway stations.</p>
-
-    <form id="stationForm">
-        <input type="hidden" id="editStationId">
-
-        <label>Station Name</label>
-        <input type="text" id="stationName"
-               placeholder="Enter station name" required>
-
-        <label>City</label>
-        <input type="text" id="stationCity"
-               placeholder="Enter city" required>
-
-        <button type="submit" id="saveStationBtn">Add Station</button>
-        <button type="button" id="resetStationBtn">Clear Form</button>
-    </form>
-
-    <p id="stationMessage"></p>
-
-    <button type="button" id="loadStationsBtn">Load Stations</button>
-
-    <div id="stationRecords">
-        <p>Click Load Stations to view records.</p>
-    </div>
-
-</section>
-</section>
-
-</div>
-</section>
+    </section>
 
     <footer>
         <p>© 2026 Railway Management System | All Rights Reserved</p>

@@ -15,7 +15,12 @@
     --field: rgba(216, 203, 179, .08);
     --danger: #B83B3B;
     --danger-hover: #8F2929;
-    --bg-img: url("https://images.pexels.com/photos/15973425/pexels-photo-15973425/free-photo-of-metro-train-on-station.jpeg");
+    /* Background slideshow: 3 modern train photos */
+    --slide-1: url("https://images.pexels.com/photos/5779300/pexels-photo-5779300.jpeg?auto=compress&cs=tinysrgb&w=1920");
+    --slide-2: url("https://images.pexels.com/photos/34247086/pexels-photo-34247086.jpeg?auto=compress&cs=tinysrgb&w=1920");
+    --slide-3: url("https://images.pexels.com/photos/610683/pexels-photo-610683.jpeg?auto=compress&cs=tinysrgb&w=1920");
+    --slide-show: 5s;   /* har picture kitni der rukti hai */
+    --slide-fade: 1s;   /* 1 second ka smooth gap/fade */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,6 +35,47 @@ body {
 }
 
 h1, h2, h3, h4 { color: var(--sand); }
+
+/* ---------- FIXED BACKGROUND SLIDESHOW ---------- */
+
+.bg-slider {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--charcoal);
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.bg-slider::after {              /* dark layer for readable text */
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(30,30,28,.55) 0%, rgba(30,30,28,.35) 50%, rgba(30,30,28,.6) 100%);
+}
+
+.bg-slide {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    animation: bgFade calc((var(--slide-show) * 3)) linear infinite;
+}
+
+.bg-slide:nth-child(1) { background-image: var(--slide-1); opacity: 1; animation-delay: 0s; }
+.bg-slide:nth-child(2) { background-image: var(--slide-2); animation-delay: var(--slide-show); }
+.bg-slide:nth-child(3) { background-image: var(--slide-3); animation-delay: calc(var(--slide-show) * 2); }
+
+/* fade in -> hold -> fade out (picture ek ke baad ek crossfade hoti hai) */
+@keyframes bgFade {
+    0%      { opacity: 0; }
+    6.67%   { opacity: 1; }    /* fade in  (1s of 15s) */
+    33.33%  { opacity: 1; }    /* hold */
+    40%     { opacity: 0; }    /* fade out (1s) while next fades in */
+    100%    { opacity: 0; }
+}
 
 /* ---------- NAVBAR + HAMBURGER (all screen sizes) ---------- */
 
@@ -135,9 +181,7 @@ h1, h2, h3, h4 { color: var(--sand); }
     align-items: center;
     padding: 80px 8%;
     color: #fff;
-    background:
-        linear-gradient(90deg, rgba(30,30,28,.96) 0%, rgba(30,30,28,.82) 42%, rgba(30,30,28,.35) 100%),
-        var(--bg-img) center / cover no-repeat;
+    background: linear-gradient(90deg, rgba(30,30,28,.82) 0%, rgba(30,30,28,.55) 45%, rgba(30,30,28,.15) 100%);
 }
 
 .hero-content { max-width: 700px; }
@@ -182,29 +226,9 @@ h1, h2, h3, h4 { color: var(--sand); }
     overflow: hidden;
     padding: 80px 8%;
     text-align: center;
-    background: var(--charcoal);
+    background: rgba(30, 30, 28, .62);
     color: var(--sand);
 }
-
-.schedules::before,
-.booking::before,
-.my-bookings::before,
-.auth-section::before,
-.admin-section::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background:
-        linear-gradient(180deg, rgba(30,30,28,.90) 0%, rgba(30,30,28,.80) 50%, rgba(30,30,28,.94) 100%),
-        var(--bg-img) center / cover no-repeat;
-    filter: grayscale(1);
-}
-
-.booking::before    { background-position: 25% center; }
-.my-bookings::before { background-position: 75% center; }
-.auth-section::before { background-position: 50% 30%; }
-.admin-section::before { background-position: 50% 70%; }
 
 .schedules h2,
 .booking h2,

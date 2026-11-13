@@ -1,4 +1,206 @@
-```javascript
+
+const API_BASE = "https://localhost:7163/api";
+// ADMIN AUTHORIZATION HEADER
+function getAdminHeaders(includeJson = false) {
+    const token = sessionStorage.getItem("railwayAdminToken");
+
+    if (!token) {
+        throw new Error("Please login as Admin first.");
+    }
+
+    const headers = {
+        "Authorization": `Bearer ${token}`
+    };
+
+    if (includeJson) {
+        headers["Content-Type"] = "application/json";
+    }
+
+    return headers;
+}
+
+const scheduleList = document.getElementById("scheduleList");
+const scheduleSelect = document.getElementById("scheduleSelect");
+const seatSelect = document.getElementById("seatSelect");
+const bookingForm = document.getElementById("bookingForm");
+const bookingMessage = document.getElementById("bookingMessage");
+
+// Load train schedules from backend
+async function loadSchedules() {
+    try {
+        const response = await fetch(`${API_BASE}/Schedule/merge-sort`);
+
+        if (!response.ok) {
+            throw new Error("Could not load train schedules.");
+        }
+
+        const data = await response.json();
+
+       const schedules = Array.isArray(data)
+    ? data
+    : (data.schedules || data.Schedules || []);
+
+        scheduleList.innerHTML = "";
+        scheduleSelect.innerHTML = '<option value="">Select a schedule</option>';
+
+        if (schedules.length === 0) {
+            scheduleList.textContent = "No train schedules available.";
+            return;
+        }
+
+        schedules.forEach(schedule => {
+            const id = schedule.scheduleId ?? schedule.ScheduleId;
+            const train = schedule.trainName ?? schedule.TrainName ?? "Train";
+            const number = schedule.trainNumber ?? schedule.TrainNumber ?? "";
+            const source = schedule.sourceStation ?? schedule.SourceStation ?? "";
+            const destination = schedule.destinationStation ?? schedule.DestinationStation ?? "";
+            const departure = schedule.departureTime ?? schedule.DepartureTime ?? "";
+            const arrival = schedule.arrivalTime ?? schedule.ArrivalTime ?? "";
+            const fare = schedule.fare ?? schedule.Fare ?? 0;
+
+            const card = document.createElement("div");
+            card.className = "schedule-card";
+
+            card.innerHTML = `
+                <h3>${escapeHTML(train)}</h3>
+                <p><strong>Train Number:</strong> ${escapeHTML(number)}</p>
+                <p><strong>From:</strong> ${escapeHTML(source)}</p>
+                <p><strong>To:</strong> ${escapeHTML(destination)}</p>
+                <p><strong>Departure:</strong> ${escapeHTML(formatDate(departure))}</p>
+                <p><strong>Arrival:</strong> ${escapeHTML(formatDate(arrival))}</p>
+                <p><strong>Fare:</strong> Rs. ${Number(fare).toLocaleString()}</p>
+            `;
+
+            scheduleList.appendChild(card);
+
+            const option = document.createElement("option");
+            option.value = id;
+            option.textContent = `${train} - ${source} to ${destination}`;
+            scheduleSelect.appendChild(option);
+        });
+
+    } catch (error) {
+        scheduleList.textContent =
+            "Unable to load schedules. Make sure your backend is running.";
+        console.error(error);
+    }
+}
+
+// Load available seats for selected schedule
+async function loadAvailableSeats(scheduleId) {
+    seatSelect.innerHTML = '<option value="">Loading seats...</option>';
+
+    if (!scheduleId) {
+        seatSelect.innerHTML = '<option value="">Select a seat</option>';
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `${API_BASE}/BookingManagement/available-seats/${scheduleId}`
+        );
+
+        if (!response.ok) {
+            throw new Error("Could not load available seats.");
+        }
+
+        const data = await response.json();
+
+const seats = Array.isArray(data)
+    ? data
+    : (data.availableSeats || data.AvailableSeats || []);
+        seatSelect.innerHTML = '<option value="">Select a seat</option>';
+
+        if (!Array.isArray(seats) || seats.length === 0) {
+            seatSelect.innerHTML =
+                '<option value="">No available seats</option>';
+            return;
+        }
+
+        seats.forEach(seat => {
+            const seatId = seat.seatId ?? seat.SeatId;
+            const seatNumber = seat.seatNumber ?? seat.SeatNumber;
+
+            const option = document.createElement("option");
+            option.value = seatId;
+            option.textContent = `Seat ${seatNumber}`;
+            seatSelect.appendChild(option);
+        });
+
+    } catch (error) {
+        seatSelect.innerHTML =
+            '<option value="">Unable to load seats</option>';
+        console.error(error);
+    }
+}
+
+// When schedule changes, load its available seats
+scheduleSelect.addEventListener("change", () => {
+    loadAvailableSeats(scheduleSelect.value);
+});
+
+
+// Create a secure booking using JWT
+bookingForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const token = sessionStorage.getItem("railwayToken");
+    const savedPassenger = sessionStorage.getItem("railwayPassenger");
+
+    if (!token || !savedPassenger) {
+        bookingMessage.textContent = "Please login first to book a ticket.";
+        bookingMessage.style.color = "red";
+        return;
+    }
+
+    if (!scheduleSelect.value || !seatSelect.value) {
+        bookingMessage.textContent = "Please select a schedule and seat.";
+        bookingMessage.style.color = "red";
+        return;
+    }
+
+    const bookingData = {
+        passengerName: document.getElementById("passengerName").value.trim(),
+        passengerEmail: document.getElementById("passengerEmail").value.trim(),
+        scheduleId: Number(scheduleSelect.value),
+        seatId: Number(seatSelect.value)
+    };
+
+    if (!bookingData.scheduleId || !bookingData.seatId) {
+        bookingMessage.textContent = "Please select a valid schedule and seat.";
+        bookingMessage.style.color = "red";
+        return;
+    }
+
+    try {
+        bookingMessage.textContent = "Processing your secure booking...";
+        bookingMessage.style.color = "#17243b";
+
+        const response = await fetch(`${API_BASE}/BookingManagement/create`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(bookingData)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.message || result.title || "Booking failed."
+            );
+        }
+
+        const bookingId = result.bookingId ?? result.BookingId;
+
+        bookingMessage.textContent = bookingId
+            ? `Booking successful! Your Booking ID is ${bookingId}.`
+            : "Your ticket has been booked successfully!";
+
+        bookingMessage.style.color = "green";
+
         bookingForm.reset();
         seatSelect.innerHTML = '<option value="">Select a seat</option>';
 
@@ -9,13 +211,38 @@
     }
 });
 
-// ==================================
-// MY BOOKINGS
-// ==================================
+
+// Prevent HTML injection in displayed text
+function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+    })[character]);
+}
+
+// Format date/time values
+function formatDate(value) {
+    if (!value) return "Not available";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+
+    return date.toLocaleString();
+}
+
+// Start loading schedules
+loadSchedules();
 
 const searchBookingsBtn = document.getElementById("searchBookingsBtn");
 
 searchBookingsBtn.addEventListener("click", loadMyBookings);
+
 
 async function loadMyBookings() {
     const token = sessionStorage.getItem("railwayToken");
@@ -29,19 +256,28 @@ async function loadMyBookings() {
 
     try {
         const passenger = JSON.parse(savedPassenger);
+
+        // Show logged-in passenger email
         document.getElementById("searchEmail").value = passenger.email;
 
         resultDiv.innerHTML = "<p>Loading your bookings...</p>";
 
-        const response = await fetch(`${API_BASE}/MyBookings/mine`, {
-            method: "GET",
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+        const response = await fetch(
+            `${API_BASE}/MyBookings/mine`,
+            {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                }
+            }
+        );
 
-        const data = await parseResponse(response);
+        const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.message || data.title || "Unable to load bookings.");
+            throw new Error(
+                data.message || data.title || "Unable to load bookings."
+            );
         }
 
         const bookings = data.bookings || [];
@@ -76,16 +312,21 @@ async function loadMyBookings() {
                 <p><strong>Seat:</strong> ${escapeHTML(seat)}</p>
                 <p><strong>Fare:</strong> Rs. ${Number(fare).toLocaleString()}</p>
                 <p><strong>Booking Date:</strong> ${escapeHTML(formatDate(date))}</p>
-                <p><strong>Status:</strong> <span class="booking-status">${escapeHTML(status)}</span></p>
+                <p><strong>Status:</strong>
+                    <span class="booking-status">${escapeHTML(status)}</span>
+                </p>
             `;
 
             if (String(status).toLowerCase() === "confirmed") {
                 const cancelButton = document.createElement("button");
+
                 cancelButton.textContent = "Cancel Ticket";
                 cancelButton.className = "cancel-ticket-btn";
+
                 cancelButton.addEventListener("click", () => {
                     cancelBooking(bookingId, passenger.email);
                 });
+
                 card.appendChild(cancelButton);
             }
 
@@ -98,8 +339,10 @@ async function loadMyBookings() {
     }
 }
 
+
 // Cancel booking securely using JWT
 async function cancelBooking(bookingId, email) {
+
     const token = sessionStorage.getItem("railwayToken");
 
     if (!token) {
@@ -107,7 +350,11 @@ async function cancelBooking(bookingId, email) {
         return;
     }
 
-    if (!confirm(`Are you sure you want to cancel Booking ID ${bookingId}?`)) {
+    const confirmed = confirm(
+        `Are you sure you want to cancel Booking ID ${bookingId}?`
+    );
+
+    if (!confirmed) {
         return;
     }
 
@@ -116,17 +363,22 @@ async function cancelBooking(bookingId, email) {
             `${API_BASE}/BookingManagement/cancel/${bookingId}`,
             {
                 method: "PUT",
-                headers: { "Authorization": `Bearer ${token}` }
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                }
             }
         );
 
-        const result = await parseResponse(response);
+        const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.message || result.title || "Ticket cancellation failed.");
+            throw new Error(
+                result.message || result.title || "Ticket cancellation failed."
+            );
         }
 
         alert("Your ticket has been cancelled successfully!");
+
         document.getElementById("searchEmail").value = email;
         await loadMyBookings();
 
@@ -135,6 +387,10 @@ async function cancelBooking(bookingId, email) {
         console.error("CANCELLATION ERROR:", error);
     }
 }
+
+        // Refresh booking history
+       
+
 
 // ==================================
 // ADMIN LOGIN WITH JWT
@@ -159,7 +415,7 @@ function showAdminAccount() {
 }
 
 // ADMIN LOGIN
-adminLoginForm.addEventListener("submit", async function (event) {
+adminLoginForm.addEventListener("submit", async function(event) {
     event.preventDefault();
 
     const loginData = {
@@ -173,11 +429,13 @@ adminLoginForm.addEventListener("submit", async function (event) {
 
         const response = await fetch(`${API_BASE}/AdminAuth/login`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify(loginData)
         });
 
-        const result = await parseResponse(response);
+        const result = await response.json();
 
         if (!response.ok) {
             throw new Error(result.message || "Admin login failed.");
@@ -188,6 +446,7 @@ adminLoginForm.addEventListener("submit", async function (event) {
         }
 
         sessionStorage.setItem("railwayAdminToken", result.token);
+
         adminLoginMessage.textContent = "Admin login successful!";
         adminLoginMessage.style.color = "green";
 
@@ -202,9 +461,11 @@ adminLoginForm.addEventListener("submit", async function (event) {
 });
 
 // ADMIN LOGOUT
-adminLogoutBtn.addEventListener("click", function () {
+adminLogoutBtn.addEventListener("click", function() {
     sessionStorage.removeItem("railwayAdminToken");
+
     showAdminAccount();
+
     adminLoginMessage.textContent = "Admin logged out successfully.";
     adminLoginMessage.style.color = "green";
 });
@@ -214,10 +475,12 @@ adminLogoutBtn.addEventListener("click", function () {
 // ==================================
 
 const loadAdminBtn = document.getElementById("loadAdminBtn");
+
 loadAdminBtn.addEventListener("click", loadAdminDashboard);
 
 async function loadAdminDashboard() {
     const token = sessionStorage.getItem("railwayAdminToken");
+
     const statsDiv = document.getElementById("adminStats");
     const bookingsDiv = document.getElementById("adminBookings");
 
@@ -234,14 +497,21 @@ async function loadAdminDashboard() {
     loadAdminBtn.textContent = "Loading...";
 
     try {
-        const headers = { "Authorization": `Bearer ${token}` };
+        const headers = {
+            "Authorization": `Bearer ${token}`
+        };
 
         const [statsResponse, bookingsResponse] = await Promise.all([
             fetch(`${API_BASE}/Admin/dashboard`, { headers }),
             fetch(`${API_BASE}/Admin/all-bookings`, { headers })
         ]);
 
-        if ([statsResponse, bookingsResponse].some(r => r.status === 401 || r.status === 403)) {
+        if (
+            statsResponse.status === 401 ||
+            statsResponse.status === 403 ||
+            bookingsResponse.status === 401 ||
+            bookingsResponse.status === 403
+        ) {
             throw new Error("Admin session expired or unauthorized. Please login again.");
         }
 
@@ -249,8 +519,9 @@ async function loadAdminDashboard() {
             throw new Error("Unable to load admin data.");
         }
 
-        const statsData = await parseResponse(statsResponse);
-        const bookingsData = await parseResponse(bookingsResponse);
+        const statsData = await statsResponse.json();
+        const bookingsData = await bookingsResponse.json();
+
         const stats = statsData.statistics || {};
 
         const totalTrains = stats.totalTrains ?? stats.TotalTrains ?? 0;
@@ -259,7 +530,8 @@ async function loadAdminDashboard() {
         const confirmed = stats.confirmedBookings ?? stats.ConfirmedBookings ?? 0;
         const cancelled = stats.cancelledBookings ?? stats.CancelledBookings ?? 0;
 
-        statsDiv.innerHTML = `            <div class="stat-card">
+        statsDiv.innerHTML = `
+            <div class="stat-card">
                 <h3>Total Trains</h3>
                 <p>${escapeHTML(totalTrains)}</p>
             </div>
@@ -292,9 +564,11 @@ async function loadAdminDashboard() {
             const get = (lower, upper) =>
                 booking[lower] ?? booking[upper] ?? "";
 
+            const bookingId = get("bookingId", "BookingId");
+
             return `
                 <tr>
-                    <td>${escapeHTML(get("bookingId", "BookingId"))}</td>
+                    <td>${escapeHTML(bookingId)}</td>
                     <td>${escapeHTML(get("passengerName", "PassengerName"))}</td>
                     <td>${escapeHTML(get("passengerEmail", "PassengerEmail"))}</td>
                     <td>${escapeHTML(get("trainName", "TrainName"))}</td>
@@ -302,6 +576,7 @@ async function loadAdminDashboard() {
                     <td>${escapeHTML(get("destinationStation", "DestinationStation"))}</td>
                     <td>${escapeHTML(get("seatNumber", "SeatNumber"))}</td>
                     <td>${escapeHTML(get("status", "Status"))}</td>
+                    
                 </tr>
             `;
         }).join("");
@@ -324,6 +599,62 @@ async function loadAdminDashboard() {
             </table>
         `;
 
+        // Delete button functionality
+        bookingsDiv.querySelectorAll(".admin-delete-btn").forEach(button => {
+            button.addEventListener("click", async () => {
+
+                const bookingId = button.dataset.bookingId;
+
+                const confirmDelete = confirm(
+                    `Are you sure you want to permanently delete Booking #${bookingId}?`
+                );
+
+                if (!confirmDelete) return;
+
+                button.disabled = true;
+                button.textContent = "Deleting...";
+
+                try {
+                    const response = await fetch(
+                        `${API_BASE}/Admin/delete-booking/${bookingId}`,
+                        {
+                            method: "DELETE",
+                            headers: {
+                                "Authorization": `Bearer ${token}`
+                            }
+                        }
+                    );
+
+                    const resultText = await response.text();
+
+                    let result = {};
+                    try {
+                        result = resultText ? JSON.parse(resultText) : {};
+                    } catch {
+                        result = { message: resultText };
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(
+                            result.message || "Unable to delete booking."
+                        );
+                    }
+
+                    alert(result.message || "Booking deleted successfully!");
+
+                    // Refresh dashboard and bookings
+                    await loadAdminDashboard();
+
+                } catch (error) {
+                    alert(error.message);
+                    console.error("DELETE BOOKING ERROR:", error);
+
+                    button.disabled = false;
+                    button.textContent = "Delete";
+                }
+            });
+        });
+
     } catch (error) {
         statsDiv.innerHTML = `<p>${escapeHTML(error.message)}</p>`;
         bookingsDiv.innerHTML = "<p>Could not load booking records.</p>";
@@ -340,87 +671,12 @@ async function loadAdminDashboard() {
         loadAdminBtn.textContent = "Load Dashboard";
     }
 }
-
 // Restore admin login display
 showAdminAccount();
 
-// ==================================
-// ADMIN TRAIN MANAGEMENT
-// ==================================
-
-const trainForm = document.getElementById("trainForm");
-const trainMessage = document.getElementById("trainMessage");
-const trainRecords = document.getElementById("trainRecords");
-
-const loadTrainsBtn = document.getElementById("loadTrainsBtn");
-const resetTrainBtn = document.getElementById("resetTrainBtn");
-
-// LOAD ALL TRAINS
-async function loadTrains() {
-    trainRecords.innerHTML = "<p>Loading trains...</p>";
-
-    try {
-        const response = await fetch(`${API_BASE}/Train`);
-
-        if (!response.ok) {
-            throw new Error(await readApiError(response, "Unable to load trains."));
-        }
-
-        const trains = await parseResponse(response);
-        trainRecords.innerHTML = "";
-
-        if (!Array.isArray(trains) || trains.length === 0) {
-            trainRecords.innerHTML = "<p>No trains found.</p>";
-            return;
-        }
-
-        trains.forEach(train => {
-            const id = train.trainId ?? train.TrainId;
-            const name = train.trainName ?? train.TrainName;
-            const number = train.trainNumber ?? train.TrainNumber;
-            const seats = train.totalSeats ?? train.TotalSeats;
-
-            const card = document.createElement("div");
-            card.className = "train-record-card";
-
-            card.innerHTML = `
-                <h4>${escapeHTML(name)}</h4>
-                <p><strong>Train ID:</strong> ${escapeHTML(id)}</p>
-                <p><strong>Train Number:</strong> ${escapeHTML(number)}</p>
-                <p><strong>Total Seats:</strong> ${escapeHTML(seats)}</p>
-                <button type="button" class="train-edit-btn">Edit</button>
-                <button type="button" class="train-delete-btn">Delete</button>
-            `;
-
-            card.querySelector(".train-edit-btn").addEventListener("click", () => {
-                document.getElementById("editTrainId").value = id;
-                document.getElementById("trainName").value = name;
-                document.getElementById("trainNumber").value = number;
-                document.getElementById("totalSeats").value = seats;
-
-                document.getElementById("saveTrainBtn").textContent = "Update Train";
-                trainMessage.textContent = `Editing Train ID: ${id}`;
-                trainForm.scrollIntoView({ behavior: "smooth" });
-            });
-
-            card.querySelector(".train-delete-btn").addEventListener("click", () => {
-                deleteTrain(id);
-            });
-
-            trainRecords.appendChild(card);
-        });
-
-    } catch (error) {
-        trainRecords.innerHTML = `<p>${escapeHTML(error.message)}</p>`;
-        console.error("LOAD TRAINS ERROR:", error);
-    }
-}
-
-loadTrainsBtn.addEventListener("click", loadTrains);
-resetTrainBtn.addEventListener("click", resetTrainForm);
 
 // Add or update train
-trainForm.addEventListener("submit", async function (event) {
+trainForm.addEventListener("submit", async function(event) {
     event.preventDefault();
 
     const trainId = document.getElementById("editTrainId").value;
@@ -441,15 +697,18 @@ trainForm.addEventListener("submit", async function (event) {
         ? `${API_BASE}/Train/${trainId}`
         : `${API_BASE}/Train`;
 
+    const method = trainId ? "PUT" : "POST";
+
     try {
         const response = await fetch(url, {
-            method: trainId ? "PUT" : "POST",
-            headers: getAdminHeaders(true),
+            method: method,
+           headers: getAdminHeaders(true),
             body: JSON.stringify(trainData)
         });
 
         if (!response.ok) {
-            throw new Error(await readApiError(response, "Train operation failed."));
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || "Train operation failed.");
         }
 
         trainMessage.textContent = trainId
@@ -457,6 +716,7 @@ trainForm.addEventListener("submit", async function (event) {
             : "New train added successfully!";
 
         trainMessage.style.color = "green";
+
         resetTrainForm();
         await loadTrains();
 
@@ -474,17 +734,22 @@ async function deleteTrain(trainId) {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/Train/${trainId}`, {
-            method: "DELETE",
-            headers: getAdminHeaders()
-        });
+        const response = await fetch(
+            `${API_BASE}/Train/${trainId}`,
+           {
+    method: "DELETE",
+    headers: getAdminHeaders()
+}
+        );
 
         if (!response.ok) {
-            throw new Error(await readApiError(response, "Unable to delete train."));
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || "Unable to delete train.");
         }
 
         trainMessage.textContent = "Train deleted successfully!";
         trainMessage.style.color = "green";
+
         await loadTrains();
 
     } catch (error) {
@@ -500,7 +765,6 @@ function resetTrainForm() {
     document.getElementById("editTrainId").value = "";
     document.getElementById("saveTrainBtn").textContent = "Add Train";
 }
-
 // ==================================
 // ADMIN SCHEDULE MANAGEMENT
 // ==================================
@@ -509,13 +773,12 @@ const managementForm = document.getElementById("scheduleManagementForm");
 const managementRecords = document.getElementById("managementScheduleRecords");
 const managementMessage = document.getElementById("managementScheduleMessage");
 
-document.getElementById("managementLoadBtn")
-    .addEventListener("click", loadManagementSchedules);
+document.getElementById("managementLoadBtn").addEventListener("click", loadManagementSchedules);
 
-document.getElementById("managementClearBtn")
-    .addEventListener("click", clearManagementScheduleForm);
+document.getElementById("managementClearBtn").addEventListener("click", clearManagementScheduleForm);
 
 managementForm.addEventListener("submit", saveManagementSchedule);
+
 
 // LOAD ALL SCHEDULES
 async function loadManagementSchedules() {
@@ -523,10 +786,15 @@ async function loadManagementSchedules() {
 
     try {
         const response = await fetch(`${API_BASE}/ScheduleManagement`);
+        const responseText = await response.text();
+        let data = {};
+        try { data = responseText ? JSON.parse(responseText) : {}; }
+        catch { data = { message: responseText }; }
 
         if (!response.ok) {
-            throw new Error(await readApiError(response, "Could not load schedules."));
-        }        const data = await parseResponse(response);
+            throw new Error(data.message || data.title || `Could not load schedules (HTTP ${response.status}).`);
+        }
+
         const schedules = Array.isArray(data) ? data : [];
 
         if (schedules.length === 0) {
@@ -537,28 +805,36 @@ async function loadManagementSchedules() {
         managementRecords.innerHTML = "";
 
         schedules.forEach(schedule => {
-            const id = getScheduleId(schedule);
-            const train = schedule.trainName ?? schedule.TrainName;
-            const number = schedule.trainNumber ?? schedule.TrainNumber;
-            const source = schedule.sourceStation ?? schedule.SourceStation;
-            const destination = schedule.destinationStation ?? schedule.DestinationStation;
+            // PostgreSQL folds unquoted SQL aliases to lowercase. Support both
+            // lowercase Dapper keys and normal camelCase/PascalCase JSON keys.
+            const id = schedule.scheduleId ?? schedule.ScheduleId ?? schedule.scheduleid;
+            const train = schedule.trainName ?? schedule.TrainName ?? schedule.trainname;
+            const number = schedule.trainNumber ?? schedule.TrainNumber ?? schedule.trainnumber;
+            const source = schedule.sourceStation ?? schedule.SourceStation ?? schedule.sourcestation;
+            const destination = schedule.destinationStation ?? schedule.DestinationStation ?? schedule.destinationstation;
             const fare = schedule.fare ?? schedule.Fare;
-            const departure = schedule.departureTime ?? schedule.DepartureTime;
-            const arrival = schedule.arrivalTime ?? schedule.ArrivalTime;
-            const trainId = schedule.trainId ?? schedule.TrainId;
-            const sourceId = schedule.sourceStationId ?? schedule.SourceStationId;
-            const destinationId = schedule.destinationStationId ?? schedule.DestinationStationId;
+            const departure = schedule.departureTime ?? schedule.DepartureTime ?? schedule.departuretime;
+            const arrival = schedule.arrivalTime ?? schedule.ArrivalTime ?? schedule.arrivaltime;
+            const trainId = schedule.trainId ?? schedule.TrainId ?? schedule.trainid;
+            const sourceId = schedule.sourceStationId ?? schedule.SourceStationId ?? schedule.sourcestationid;
+            const destinationId = schedule.destinationStationId ?? schedule.DestinationStationId ?? schedule.destinationstationid;
+
+            if (id === undefined || id === null || id === "") {
+                console.error("Schedule record has no ID:", schedule);
+                return;
+            }
 
             const card = document.createElement("div");
             card.className = "management-schedule-card";
 
             card.innerHTML = `
-                <h4>${escapeHTML(train ?? "Train")} (${escapeHTML(number ?? "")})</h4>
-                <p><strong>Schedule ID:</strong> ${escapeHTML(id)}</p>
-                <p><strong>Route:</strong> ${escapeHTML(source ?? "")} → ${escapeHTML(destination ?? "")}</p>
-                <p><strong>Departure:</strong> ${escapeHTML(formatDate(departure))}</p>
-                <p><strong>Arrival:</strong> ${escapeHTML(formatDate(arrival))}</p>
-                <p><strong>Fare:</strong> Rs. ${escapeHTML(fare)}</p>
+                <h4>${escapeHTML(String(train ?? "Train"))} (${escapeHTML(String(number ?? ""))})</h4>
+                <p><strong>Schedule ID:</strong> ${id}</p>
+                <p><strong>Route:</strong> ${escapeHTML(String(source ?? ""))} → ${escapeHTML(String(destination ?? ""))}</p>
+                <p><strong>Departure:</strong> ${formatDate(departure)}</p>
+                <p><strong>Arrival:</strong> ${formatDate(arrival)}</p>
+                <p><strong>Fare:</strong> Rs. ${fare}</p>
+
                 <button class="management-edit-btn" type="button">Edit</button>
                 <button class="management-delete-btn" type="button">Delete</button>
             `;
@@ -579,9 +855,9 @@ async function loadManagementSchedules() {
 
     } catch (error) {
         managementRecords.innerHTML = `<p>${escapeHTML(error.message)}</p>`;
-        console.error("LOAD SCHEDULES ERROR:", error);
     }
 }
+
 
 // ADD OR UPDATE SCHEDULE
 async function saveManagementSchedule(event) {
@@ -615,12 +891,14 @@ async function saveManagementSchedule(event) {
 
         const response = await fetch(url, {
             method: id ? "PUT" : "POST",
-            headers: getAdminHeaders(true),
+           headers: getAdminHeaders(true),
             body: JSON.stringify(scheduleData)
         });
 
+        const result = await response.json();
+
         if (!response.ok) {
-            throw new Error(await readApiError(response, "Schedule operation failed."));
+            throw new Error(result.message || result.title || "Schedule operation failed.");
         }
 
         managementMessage.textContent = id
@@ -632,9 +910,9 @@ async function saveManagementSchedule(event) {
 
     } catch (error) {
         managementMessage.textContent = error.message;
-        console.error("SAVE SCHEDULE ERROR:", error);
     }
 }
+
 
 // EDIT SCHEDULE
 function editManagementSchedule(schedule) {
@@ -643,9 +921,9 @@ function editManagementSchedule(schedule) {
     document.getElementById("managementSourceId").value = schedule.sourceId;
     document.getElementById("managementDestinationId").value = schedule.destinationId;
     document.getElementById("managementDeparture").value =
-        toDateTimeLocal(schedule.departure);
+        new Date(schedule.departure).toISOString().slice(0, 16);
     document.getElementById("managementArrival").value =
-        toDateTimeLocal(schedule.arrival);
+        new Date(schedule.arrival).toISOString().slice(0, 16);
     document.getElementById("managementFare").value = schedule.fare;
 
     document.getElementById("managementSaveBtn").textContent = "Update Schedule";
@@ -654,60 +932,56 @@ function editManagementSchedule(schedule) {
     managementForm.scrollIntoView({ behavior: "smooth" });
 }
 
+
 // DELETE SCHEDULE
 async function deleteManagementSchedule(id) {
-    const scheduleId = Number(id);
-
-    if (!Number.isInteger(scheduleId) || scheduleId <= 0) {
-        managementMessage.textContent =
-            `Invalid Schedule ID received: ${String(id)}. Reload schedules and check the API response.`;
-        managementMessage.style.color = "red";
-        console.error("INVALID SCHEDULE ID:", id);
+    // Never send /ScheduleManagement/undefined (it returns HTTP 404).
+    if (id === undefined || id === null || String(id).trim() === "") {
+        managementMessage.textContent = "Schedule ID is missing. Reload schedules and try again.";
+        console.error("Cannot delete schedule: missing ID", id);
         return;
     }
 
-    if (!confirm(`Are you sure you want to delete Schedule ID ${scheduleId}?`)) {
+    if (!confirm(`Are you sure you want to delete schedule ID ${id}?`)) {
         return;
     }
 
     try {
-        const response = await fetch(
-            `${API_BASE}/ScheduleManagement/${scheduleId}`,
-            {
-                method: "DELETE",
-                headers: getAdminHeaders()
-            }
-        );
+        const response = await fetch(`${API_BASE}/ScheduleManagement/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            headers: getAdminHeaders()
+        });
 
-        const result = await parseResponse(response);
+        const responseText = await response.text();
+        let result = {};
+        try { result = responseText ? JSON.parse(responseText) : {}; }
+        catch { result = { message: responseText }; }
 
         if (!response.ok) {
             throw new Error(
-                result.message ||
-                result.title ||
-                `Could not delete schedule. (HTTP ${response.status})`
+                result.message || result.title ||
+                (response.status === 404
+                    ? `Schedule ID ${id} was not found. Refresh the schedule list and check the ID.`
+                    : `Could not delete schedule (HTTP ${response.status}).`)
             );
         }
 
-        managementMessage.textContent = "Schedule deleted successfully!";
-        managementMessage.style.color = "green";
+        managementMessage.textContent = `Schedule ID ${id} deleted successfully!`;
         await loadManagementSchedules();
 
     } catch (error) {
         managementMessage.textContent = error.message;
-        managementMessage.style.color = "red";
         console.error("DELETE SCHEDULE ERROR:", error);
     }
 }
+
 
 // CLEAR FORM
 function clearManagementScheduleForm() {
     managementForm.reset();
     document.getElementById("managementScheduleId").value = "";
     document.getElementById("managementSaveBtn").textContent = "Add Schedule";
-}
-
-// ==================================
+}// ==================================
 // ADMIN STATION MANAGEMENT
 // ==================================
 
@@ -723,18 +997,19 @@ document.getElementById("resetStationBtn")
 
 stationForm.addEventListener("submit", saveStation);
 
+
 // LOAD STATIONS
 async function loadStations() {
     stationRecords.innerHTML = "<p>Loading stations...</p>";
 
     try {
         const response = await fetch(`${API_BASE}/StationManagement`);
+        const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(await readApiError(response, "Could not load stations."));
+            throw new Error(data.message || "Could not load stations.");
         }
 
-        const data = await parseResponse(response);
         const stations = Array.isArray(data) ? data : [];
 
         if (stations.length === 0) {
@@ -745,35 +1020,40 @@ async function loadStations() {
         stationRecords.innerHTML = "";
 
         stations.forEach(station => {
-            const id = station.stationId ?? station.StationId ?? station.stationid;
-            const name = station.stationName ?? station.StationName ?? station.stationname;
+            const id = station.stationId ?? station.StationId;
+            const name = station.stationName ?? station.StationName;
             const city = station.city ?? station.City;
 
             const card = document.createElement("div");
             card.className = "station-record-card";
 
             card.innerHTML = `
-                <h4>${escapeHTML(name ?? "")}</h4>
-                <p><strong>Station ID:</strong> ${escapeHTML(id)}</p>
-                <p><strong>City:</strong> ${escapeHTML(city ?? "")}</p>
+                <h4>${escapeHTML(String(name ?? ""))}</h4>
+                <p><strong>Station ID:</strong> ${id}</p>
+                <p><strong>City:</strong> ${escapeHTML(String(city ?? ""))}</p>
                 <button type="button" class="station-edit-btn">Edit</button>
                 <button type="button" class="station-delete-btn">Delete</button>
             `;
 
             card.querySelector(".station-edit-btn")
-                .addEventListener("click", () => editStation(id, name, city));
+                .addEventListener("click", () => {
+                    editStation(id, name, city);
+                });
 
             card.querySelector(".station-delete-btn")
-                .addEventListener("click", () => deleteStation(id));
+                .addEventListener("click", () => {
+                    deleteStation(id);
+                });
 
             stationRecords.appendChild(card);
         });
 
     } catch (error) {
-        stationRecords.innerHTML = `<p>${escapeHTML(error.message)}</p>`;
-        console.error("LOAD STATIONS ERROR:", error);
+        stationRecords.innerHTML =
+            `<p>${escapeHTML(error.message)}</p>`;
     }
 }
+
 
 // ADD OR UPDATE STATION
 async function saveStation(event) {
@@ -798,12 +1078,14 @@ async function saveStation(event) {
 
         const response = await fetch(url, {
             method: id ? "PUT" : "POST",
-            headers: getAdminHeaders(true),
+           headers: getAdminHeaders(true),
             body: JSON.stringify(stationData)
         });
 
+        const result = await response.json();
+
         if (!response.ok) {
-            throw new Error(await readApiError(response, "Station operation failed."));
+            throw new Error(result.message || result.title || "Station operation failed.");
         }
 
         stationMessage.textContent = id
@@ -815,16 +1097,12 @@ async function saveStation(event) {
 
     } catch (error) {
         stationMessage.textContent = error.message;
-        console.error("SAVE STATION ERROR:", error);
     }
-}// EDIT STATION
-function editStation(id, name, city) {
-    if (id === undefined || id === null || id === "undefined") {
-        stationMessage.textContent =
-            "Station ID missing from API response. Check the Network tab.";
-        return;
-    }
+}
 
+
+// EDIT STATION
+function editStation(id, name, city) {
     document.getElementById("editStationId").value = id;
     document.getElementById("stationName").value = name;
     document.getElementById("stationCity").value = city;
@@ -834,6 +1112,7 @@ function editStation(id, name, city) {
 
     stationForm.scrollIntoView({ behavior: "smooth" });
 }
+
 
 // DELETE STATION
 async function deleteStation(id) {
@@ -845,13 +1124,15 @@ async function deleteStation(id) {
         const response = await fetch(
             `${API_BASE}/StationManagement/${id}`,
             {
-                method: "DELETE",
-                headers: getAdminHeaders()
-            }
+    method: "DELETE",
+    headers: getAdminHeaders()
+} 
         );
 
+        const result = await response.json();
+
         if (!response.ok) {
-            throw new Error(await readApiError(response, "Could not delete station."));
+            throw new Error(result.message || result.title || "Could not delete station.");
         }
 
         stationMessage.textContent = "Station deleted successfully!";
@@ -859,9 +1140,9 @@ async function deleteStation(id) {
 
     } catch (error) {
         stationMessage.textContent = error.message;
-        console.error("DELETE STATION ERROR:", error);
     }
 }
+
 
 // CLEAR FORM
 function clearStationForm() {
@@ -869,9 +1150,7 @@ function clearStationForm() {
 
     document.getElementById("editStationId").value = "";
     document.getElementById("saveStationBtn").textContent = "Add Station";
-}
-
-// ==================================
+}// ==================================
 // PASSENGER LOGIN & REGISTRATION
 // ==================================
 
@@ -886,6 +1165,7 @@ const registerMessage =
 
 const loginMessage =
     document.getElementById("loginMessage");
+
 
 // REGISTER PASSENGER
 passengerRegisterForm.addEventListener("submit", async function (event) {
@@ -906,14 +1186,13 @@ passengerRegisterForm.addEventListener("submit", async function (event) {
             body: JSON.stringify(passengerData)
         });
 
-        const result = await parseResponse(response);
+        const result = await response.json();
 
         if (!response.ok) {
             throw new Error(result.message || "Registration failed.");
         }
 
-        registerMessage.textContent =
-            "Registration successful! You can now login.";
+        registerMessage.textContent = "Registration successful! You can now login.";
         registerMessage.style.color = "green";
 
         passengerRegisterForm.reset();
@@ -923,11 +1202,15 @@ passengerRegisterForm.addEventListener("submit", async function (event) {
     } catch (error) {
         registerMessage.textContent = error.message;
         registerMessage.style.color = "red";
-        console.error("REGISTER ERROR:", error);
     }
 });
 
+
+// LOGIN PASSENGER
+
 // LOGIN PASSENGER WITH JWT TOKEN
+
+ // LOGIN PASSENGER WITH JWT TOKEN
 passengerLoginForm.addEventListener("submit", async function (event) {
     event.preventDefault();
 
@@ -945,7 +1228,9 @@ passengerLoginForm.addEventListener("submit", async function (event) {
             body: JSON.stringify(loginData)
         });
 
-        const result = await parseResponse(response);
+        const result = await response.json();
+
+        console.log("LOGIN API RESPONSE:", result);
 
         if (!response.ok) {
             throw new Error(result.message || "Login failed.");
@@ -965,8 +1250,10 @@ passengerLoginForm.addEventListener("submit", async function (event) {
         // Save JWT token
         sessionStorage.setItem("railwayToken", result.token);
 
-        loginMessage.textContent =
-            "Login successful! Secure session started.";
+        // Verify token was saved
+        console.log("JWT TOKEN SAVED:", !!sessionStorage.getItem("railwayToken"));
+
+        loginMessage.textContent = "Login successful! Secure session started.";
         loginMessage.style.color = "green";
 
         passengerLoginForm.reset();
@@ -978,6 +1265,7 @@ passengerLoginForm.addEventListener("submit", async function (event) {
         console.error("LOGIN ERROR:", error);
     }
 });
+
 
 // SHOW LOGGED-IN PASSENGER
 function showPassengerAccount() {
@@ -998,6 +1286,9 @@ function showPassengerAccount() {
         passenger.passengerName;
 }
 
+
+// LOGOUT PASSENGER
+
 // LOGOUT PASSENGER
 document.getElementById("passengerLogoutBtn")
     .addEventListener("click", function () {
@@ -1011,12 +1302,5 @@ document.getElementById("passengerLogoutBtn")
         loginMessage.style.color = "green";
     });
 
-// ==================================
-// START
-// ==================================
-
-// Load public schedules when the page opens
-loadSchedules();
-
-// Restore login display when page loads
+// RESTORE LOGIN DISPLAY WHEN PAGE LOADS
 showPassengerAccount();

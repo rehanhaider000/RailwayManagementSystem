@@ -674,6 +674,107 @@ async function loadAdminDashboard() {
 showAdminAccount();
 
 
+// ==================================
+// ADMIN TRAIN MANAGEMENT
+// ==================================
+
+const trainForm = document.getElementById("trainForm");
+const trainMessage = document.getElementById("trainMessage");
+const trainRecords = document.getElementById("trainRecords");
+
+const loadTrainsBtn = document.getElementById("loadTrainsBtn");
+const resetTrainBtn = document.getElementById("resetTrainBtn");
+
+// LOAD ALL TRAINS
+async function loadTrains() {
+
+    trainRecords.innerHTML = "<p>Loading trains...</p>";
+
+    try {
+        const response = await fetch(`${API_BASE}/Train`);
+
+        if (!response.ok) {
+            throw new Error("Unable to load trains.");
+        }
+
+        const trains = await response.json();
+
+        trainRecords.innerHTML = "";
+
+        if (!Array.isArray(trains) || trains.length === 0) {
+            trainRecords.innerHTML = "<p>No trains found.</p>";
+            return;
+        }
+
+        trains.forEach(train => {
+
+            const id = train.trainId ?? train.TrainId;
+            const name = train.trainName ?? train.TrainName;
+            const number = train.trainNumber ?? train.TrainNumber;
+            const seats = train.totalSeats ?? train.TotalSeats;
+
+            const card = document.createElement("div");
+            card.className = "train-record-card";
+
+            card.innerHTML = `
+                <h4>${escapeHTML(name)}</h4>
+                <p><strong>Train ID:</strong> ${escapeHTML(id)}</p>
+                <p><strong>Train Number:</strong> ${escapeHTML(number)}</p>
+                <p><strong>Total Seats:</strong> ${escapeHTML(seats)}</p>
+
+                <button type="button" class="train-edit-btn">
+                    Edit
+                </button>
+
+                <button type="button" class="train-delete-btn">
+                    Delete
+                </button>
+            `;
+
+            // EDIT TRAIN
+            card.querySelector(".train-edit-btn")
+                .addEventListener("click", () => {
+
+                    document.getElementById("editTrainId").value = id;
+                    document.getElementById("trainName").value = name;
+                    document.getElementById("trainNumber").value = number;
+                    document.getElementById("totalSeats").value = seats;
+
+                    document.getElementById("saveTrainBtn").textContent =
+                        "Update Train";
+
+                    trainMessage.textContent =
+                        `Editing Train ID: ${id}`;
+
+                    trainForm.scrollIntoView({
+                        behavior: "smooth"
+                    });
+                });
+
+            // DELETE TRAIN
+            card.querySelector(".train-delete-btn")
+                .addEventListener("click", () => {
+                    deleteTrain(id);
+                });
+
+            trainRecords.appendChild(card);
+        });
+
+    } catch (error) {
+
+        trainRecords.innerHTML =
+            `<p>${escapeHTML(error.message)}</p>`;
+
+        console.error("LOAD TRAINS ERROR:", error);
+    }
+}
+
+// LOAD BUTTON
+loadTrainsBtn.addEventListener("click", loadTrains);
+
+// CLEAR BUTTON
+resetTrainBtn.addEventListener("click", resetTrainForm);
+
 // Add or update train
 trainForm.addEventListener("submit", async function(event) {
     event.preventDefault();

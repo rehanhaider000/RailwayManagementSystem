@@ -531,10 +531,6 @@ async function loadAdminDashboard() {
                     <td>${escapeHTML(get("destinationStation", "DestinationStation"))}</td>
                     <td>${escapeHTML(get("seatNumber", "SeatNumber"))}</td>
                     <td>${escapeHTML(get("status", "Status"))}</td>
-                    <td>
-                        <button type="button" class="admin-delete-btn"
-                                data-booking-id="${escapeHTML(bookingId)}">Delete</button>
-                    </td>
                 </tr>
             `;
         }).join("");
@@ -551,39 +547,11 @@ async function loadAdminDashboard() {
                         <th>To</th>
                         <th>Seat</th>
                         <th>Status</th>
-                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
             </table>
         `;
-
-        bookingsDiv.querySelectorAll(".admin-delete-btn").forEach(button => {
-            button.addEventListener("click", async () => {
-                const bookingId = button.dataset.bookingId;
-
-                if (!confirm(`Are you sure you want to permanently delete Booking #${bookingId}?`)) return;
-
-                button.disabled = true;
-                button.textContent = "Deleting...";
-
-                try {
-                    const result = await adminRequest(
-                        `${API_BASE}/Admin/delete-booking/${encodeURIComponent(bookingId)}`,
-                        "DELETE", null, "Unable to delete booking."
-                    );
-
-                    alert(result.message || "Booking deleted successfully!");
-                    await loadAdminDashboard();
-
-                } catch (error) {
-                    alert(error.message);
-                    console.error("DELETE BOOKING ERROR:", error);
-                    button.disabled = false;
-                    button.textContent = "Delete";
-                }
-            });
-        });
 
     } catch (error) {
         statsDiv.innerHTML = `<p>${escapeHTML(error.message)}</p>`;

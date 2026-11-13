@@ -1,218 +1,19 @@
-
 const API_BASE = "https://localhost:7163/api";
-// ADMIN AUTHORIZATION HEADER
-function getAdminHeaders(includeJson = false) {
-    const token = sessionStorage.getItem("railwayAdminToken");
 
-    if (!token) {
-        throw new Error("Please login as Admin first.");
+// ==================================
+// COMMON HELPERS
+// ==================================
+
+const $ = id => document.getElementById(id);
+
+// Get first defined value from an object (camelCase / PascalCase / lowercase)
+function pick(obj, ...keys) {
+    for (const key of keys) {
+        if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
     }
-
-    const headers = {
-        "Authorization": `Bearer ${token}`
-    };
-
-    if (includeJson) {
-        headers["Content-Type"] = "application/json";
-    }
-
-    return headers;
+    return undefined;
 }
 
-const scheduleList = document.getElementById("scheduleList");
-const scheduleSelect = document.getElementById("scheduleSelect");
-const seatSelect = document.getElementById("seatSelect");
-const bookingForm = document.getElementById("bookingForm");
-const bookingMessage = document.getElementById("bookingMessage");
-
-// Load train schedules from backend
-async function loadSchedules() {
-    try {
-        const response = await fetch(`${API_BASE}/Schedule/merge-sort`);
-
-        if (!response.ok) {
-            throw new Error("Could not load train schedules.");
-        }
-
-        const data = await response.json();
-
-       const schedules = Array.isArray(data)
-    ? data
-    : (data.schedules || data.Schedules || []);
-
-        scheduleList.innerHTML = "";
-        scheduleSelect.innerHTML = '<option value="">Select a schedule</option>';
-
-        if (schedules.length === 0) {
-            scheduleList.textContent = "No train schedules available.";
-            return;
-        }
-
-        schedules.forEach(schedule => {
-            const id = schedule.scheduleId ?? schedule.ScheduleId;
-            const train = schedule.trainName ?? schedule.TrainName ?? "Train";
-            const number = schedule.trainNumber ?? schedule.TrainNumber ?? "";
-            const source = schedule.sourceStation ?? schedule.SourceStation ?? "";
-            const destination = schedule.destinationStation ?? schedule.DestinationStation ?? "";
-            const departure = schedule.departureTime ?? schedule.DepartureTime ?? "";
-            const arrival = schedule.arrivalTime ?? schedule.ArrivalTime ?? "";
-            const fare = schedule.fare ?? schedule.Fare ?? 0;
-
-            const card = document.createElement("div");
-            card.className = "schedule-card";
-
-            card.innerHTML = `
-                <h3>${escapeHTML(train)}</h3>
-                <p><strong>Train Number:</strong> ${escapeHTML(number)}</p>
-                <p><strong>From:</strong> ${escapeHTML(source)}</p>
-                <p><strong>To:</strong> ${escapeHTML(destination)}</p>
-                <p><strong>Departure:</strong> ${escapeHTML(formatDate(departure))}</p>
-                <p><strong>Arrival:</strong> ${escapeHTML(formatDate(arrival))}</p>
-                <p><strong>Fare:</strong> Rs. ${Number(fare).toLocaleString()}</p>
-            `;
-
-            scheduleList.appendChild(card);
-
-            const option = document.createElement("option");
-            option.value = id;
-            option.textContent = `${train} - ${source} to ${destination}`;
-            scheduleSelect.appendChild(option);
-        });
-
-    } catch (error) {
-        scheduleList.textContent =
-            "Unable to load schedules. Make sure your backend is running.";
-        console.error(error);
-    }
-}
-
-// Load available seats for selected schedule
-async function loadAvailableSeats(scheduleId) {
-    seatSelect.innerHTML = '<option value="">Loading seats...</option>';
-
-    if (!scheduleId) {
-        seatSelect.innerHTML = '<option value="">Select a seat</option>';
-        return;
-    }
-
-    try {
-        const response = await fetch(
-            `${API_BASE}/BookingManagement/available-seats/${scheduleId}`
-        );
-
-        if (!response.ok) {
-            throw new Error("Could not load available seats.");
-        }
-
-        const data = await response.json();
-
-const seats = Array.isArray(data)
-    ? data
-    : (data.availableSeats || data.AvailableSeats || []);
-        seatSelect.innerHTML = '<option value="">Select a seat</option>';
-
-        if (!Array.isArray(seats) || seats.length === 0) {
-            seatSelect.innerHTML =
-                '<option value="">No available seats</option>';
-            return;
-        }
-
-        seats.forEach(seat => {
-            const seatId = seat.seatId ?? seat.SeatId;
-            const seatNumber = seat.seatNumber ?? seat.SeatNumber;
-
-            const option = document.createElement("option");
-            option.value = seatId;
-            option.textContent = `Seat ${seatNumber}`;
-            seatSelect.appendChild(option);
-        });
-
-    } catch (error) {
-        seatSelect.innerHTML =
-            '<option value="">Unable to load seats</option>';
-        console.error(error);
-    }
-}
-
-// When schedule changes, load its available seats
-scheduleSelect.addEventListener("change", () => {
-    loadAvailableSeats(scheduleSelect.value);
-});
-
-
-// Create a secure booking using JWT
-bookingForm.addEventListener("submit", async function (event) {
-    event.preventDefault();
-
-    const token = sessionStorage.getItem("railwayToken");
-    const savedPassenger = sessionStorage.getItem("railwayPassenger");
-
-    if (!token || !savedPassenger) {
-        bookingMessage.textContent = "Please login first to book a ticket.";
-        bookingMessage.style.color = "red";
-        return;
-    }
-
-    if (!scheduleSelect.value || !seatSelect.value) {
-        bookingMessage.textContent = "Please select a schedule and seat.";
-        bookingMessage.style.color = "red";
-        return;
-    }
-
-    const bookingData = {
-        passengerName: document.getElementById("passengerName").value.trim(),
-        passengerEmail: document.getElementById("passengerEmail").value.trim(),
-        scheduleId: Number(scheduleSelect.value),
-        seatId: Number(seatSelect.value)
-    };
-
-    if (!bookingData.scheduleId || !bookingData.seatId) {
-        bookingMessage.textContent = "Please select a valid schedule and seat.";
-        bookingMessage.style.color = "red";
-        return;
-    }
-
-    try {
-        bookingMessage.textContent = "Processing your secure booking...";
-        bookingMessage.style.color = "#17243b";
-
-        const response = await fetch(`${API_BASE}/BookingManagement/create`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify(bookingData)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(
-                result.message || result.title || "Booking failed."
-            );
-        }
-
-        const bookingId = result.bookingId ?? result.BookingId;
-
-        bookingMessage.textContent = bookingId
-            ? `Booking successful! Your Booking ID is ${bookingId}.`
-            : "Your ticket has been booked successfully!";
-
-        bookingMessage.style.color = "green";
-
-        bookingForm.reset();
-        seatSelect.innerHTML = '<option value="">Select a seat</option>';
-
-    } catch (error) {
-        bookingMessage.textContent = error.message;
-        bookingMessage.style.color = "red";
-        console.error("BOOKING ERROR:", error);
-    }
-});
-
-
-// Prevent HTML injection in displayed text
 function escapeHTML(value) {
     return String(value ?? "").replace(/[&<>"']/g, character => ({
         "&": "&amp;",
@@ -223,31 +24,294 @@ function escapeHTML(value) {
     })[character]);
 }
 
-// Format date/time values
 function formatDate(value) {
     if (!value) return "Not available";
-
     const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return String(value);
-    }
-
+    if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleString();
 }
 
-// Start loading schedules
+// Convert any date to value for <input type="datetime-local"> in LOCAL time
+function toLocalInput(value) {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+           `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function showMsg(element, text, color) {
+    if (!element) return;
+    element.textContent = text;
+    element.style.color = color || "";
+}
+
+// Pull a readable message out of any backend response
+function extractMessage(data, status, fallback) {
+    if (data) {
+        if (data.message) return data.message;
+        if (data.title && !data.errors) return data.title;
+        if (data.errors) {
+            const first = Object.values(data.errors).flat()[0];
+            if (first) return first;
+        }
+        if (data.title) return data.title;
+    }
+    return `${fallback} (HTTP ${status})`;
+}
+
+/*
+ * SAFE request helper.
+ * Never crashes on an empty body (204, 401, 403, etc.).
+ * Returns parsed JSON ({} if body is empty). Throws Error with a clear message.
+ */
+async function apiRequest(url, options = {}, fallbackMessage = "Request failed.") {
+    let response;
+    try {
+        response = await fetch(url, options);
+    } catch (networkError) {
+        throw new Error("Cannot reach the server. Make sure your backend is running.");
+    }
+
+    const text = await response.text();
+    let data = {};
+
+    if (text) {
+        try {
+            data = JSON.parse(text);
+        } catch {
+            data = { message: text };
+        }
+    }
+
+    if (!response.ok) {
+        const error = new Error(extractMessage(data, response.status, fallbackMessage));
+        error.status = response.status;
+        throw error;
+    }
+
+    return data;
+}
+
+// ==================================
+// ADMIN AUTH HELPERS
+// ==================================
+
+function getAdminHeaders(includeJson = false) {
+    const token = sessionStorage.getItem("railwayAdminToken");
+
+    if (!token) {
+        throw new Error("Please login as Admin first.");
+    }
+
+    const headers = { "Authorization": `Bearer ${token}` };
+
+    if (includeJson) {
+        headers["Content-Type"] = "application/json";
+    }
+
+    return headers;
+}
+
+// Request with admin token. Handles expired session automatically.
+async function adminRequest(url, method = "GET", body = null, fallbackMessage = "Operation failed.") {
+    const options = {
+        method,
+        headers: getAdminHeaders(body !== null)
+    };
+
+    if (body !== null) {
+        options.body = JSON.stringify(body);
+    }
+
+    try {
+        return await apiRequest(url, options, fallbackMessage);
+    } catch (error) {
+        if (error.status === 401 || error.status === 403) {
+            sessionStorage.removeItem("railwayAdminToken");
+            showAdminAccount();
+            throw new Error("Admin session expired or unauthorized. Please login again.");
+        }
+        throw error;
+    }
+}
+
+// ==================================
+// PUBLIC: SCHEDULES + BOOKING
+// ==================================
+
+const scheduleList = $("scheduleList");
+const scheduleSelect = $("scheduleSelect");
+const seatSelect = $("seatSelect");
+const bookingForm = $("bookingForm");
+const bookingMessage = $("bookingMessage");
+
+async function loadSchedules() {
+    try {
+        const data = await apiRequest(
+            `${API_BASE}/Schedule/merge-sort`, {}, "Could not load train schedules."
+        );
+
+        const schedules = Array.isArray(data)
+            ? data
+            : (data.schedules || data.Schedules || []);
+
+        scheduleList.innerHTML = "";
+        scheduleSelect.innerHTML = '<option value="">Select a schedule</option>';
+
+        if (schedules.length === 0) {
+            scheduleList.textContent = "No train schedules available.";
+            return;
+        }
+
+        schedules.forEach(schedule => {
+            const id = pick(schedule, "scheduleId", "ScheduleId");
+            const train = pick(schedule, "trainName", "TrainName") ?? "Train";
+            const number = pick(schedule, "trainNumber", "TrainNumber") ?? "";
+            const source = pick(schedule, "sourceStation", "SourceStation") ?? "";
+            const destination = pick(schedule, "destinationStation", "DestinationStation") ?? "";
+            const departure = pick(schedule, "departureTime", "DepartureTime") ?? "";
+            const arrival = pick(schedule, "arrivalTime", "ArrivalTime") ?? "";
+            const fare = pick(schedule, "fare", "Fare") ?? 0;
+
+            const card = document.createElement("div");
+            card.className = "schedule-card";
+            card.innerHTML = `
+                <h3>${escapeHTML(train)}</h3>
+                <p><strong>Train Number:</strong> ${escapeHTML(number)}</p>
+                <p><strong>From:</strong> ${escapeHTML(source)}</p>
+                <p><strong>To:</strong> ${escapeHTML(destination)}</p>
+                <p><strong>Departure:</strong> ${escapeHTML(formatDate(departure))}</p>
+                <p><strong>Arrival:</strong> ${escapeHTML(formatDate(arrival))}</p>
+                <p><strong>Fare:</strong> Rs. ${Number(fare).toLocaleString()}</p>
+            `;
+            scheduleList.appendChild(card);
+
+            const option = document.createElement("option");
+            option.value = id;
+            option.textContent = `${train} - ${source} to ${destination}`;
+            scheduleSelect.appendChild(option);
+        });
+
+    } catch (error) {
+        scheduleList.textContent = "Unable to load schedules. Make sure your backend is running.";
+        console.error(error);
+    }
+}
+
+async function loadAvailableSeats(scheduleId) {
+    seatSelect.innerHTML = '<option value="">Loading seats...</option>';
+
+    if (!scheduleId) {
+        seatSelect.innerHTML = '<option value="">Select a seat</option>';
+        return;
+    }
+
+    try {
+        const data = await apiRequest(
+            `${API_BASE}/BookingManagement/available-seats/${scheduleId}`,
+            {}, "Could not load available seats."
+        );
+
+        const seats = Array.isArray(data)
+            ? data
+            : (data.availableSeats || data.AvailableSeats || []);
+
+        seatSelect.innerHTML = '<option value="">Select a seat</option>';
+
+        if (!Array.isArray(seats) || seats.length === 0) {
+            seatSelect.innerHTML = '<option value="">No available seats</option>';
+            return;
+        }
+
+        seats.forEach(seat => {
+            const option = document.createElement("option");
+            option.value = pick(seat, "seatId", "SeatId");
+            option.textContent = `Seat ${pick(seat, "seatNumber", "SeatNumber")}`;
+            seatSelect.appendChild(option);
+        });
+
+    } catch (error) {
+        seatSelect.innerHTML = '<option value="">Unable to load seats</option>';
+        console.error(error);
+    }
+}
+
+scheduleSelect.addEventListener("change", () => {
+    loadAvailableSeats(scheduleSelect.value);
+});
+
+bookingForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const token = sessionStorage.getItem("railwayToken");
+    const savedPassenger = sessionStorage.getItem("railwayPassenger");
+
+    if (!token || !savedPassenger) {
+        showMsg(bookingMessage, "Please login first to book a ticket.", "red");
+        return;
+    }
+
+    if (!scheduleSelect.value || !seatSelect.value) {
+        showMsg(bookingMessage, "Please select a schedule and seat.", "red");
+        return;
+    }
+
+    const bookingData = {
+        passengerName: $("passengerName").value.trim(),
+        passengerEmail: $("passengerEmail").value.trim(),
+        scheduleId: Number(scheduleSelect.value),
+        seatId: Number(seatSelect.value)
+    };
+
+    if (!bookingData.scheduleId || !bookingData.seatId) {
+        showMsg(bookingMessage, "Please select a valid schedule and seat.", "red");
+        return;
+    }
+
+    try {
+        showMsg(bookingMessage, "Processing your secure booking...", "#17243b");
+
+        const result = await apiRequest(`${API_BASE}/BookingManagement/create`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(bookingData)
+        }, "Booking failed.");
+
+        const bookingId = pick(result, "bookingId", "BookingId");
+
+        showMsg(
+            bookingMessage,
+            bookingId
+                ? `Booking successful! Your Booking ID is ${bookingId}.`
+                : "Your ticket has been booked successfully!",
+            "green"
+        );
+
+        bookingForm.reset();
+        seatSelect.innerHTML = '<option value="">Select a seat</option>';
+
+    } catch (error) {
+        showMsg(bookingMessage, error.message, "red");
+        console.error("BOOKING ERROR:", error);
+    }
+});
+
 loadSchedules();
 
-const searchBookingsBtn = document.getElementById("searchBookingsBtn");
+// ==================================
+// PASSENGER: MY BOOKINGS
+// ==================================
 
-searchBookingsBtn.addEventListener("click", loadMyBookings);
-
+$("searchBookingsBtn").addEventListener("click", loadMyBookings);
 
 async function loadMyBookings() {
     const token = sessionStorage.getItem("railwayToken");
     const savedPassenger = sessionStorage.getItem("railwayPassenger");
-    const resultDiv = document.getElementById("myBookingsList");
+    const resultDiv = $("myBookingsList");
 
     if (!token || !savedPassenger) {
         resultDiv.innerHTML = "<p>Please login first to view your bookings.</p>";
@@ -256,31 +320,15 @@ async function loadMyBookings() {
 
     try {
         const passenger = JSON.parse(savedPassenger);
-
-        // Show logged-in passenger email
-        document.getElementById("searchEmail").value = passenger.email;
-
+        $("searchEmail").value = passenger.email;
         resultDiv.innerHTML = "<p>Loading your bookings...</p>";
 
-        const response = await fetch(
-            `${API_BASE}/MyBookings/mine`,
-            {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${token}`
-                }
-            }
-        );
+        const data = await apiRequest(`${API_BASE}/MyBookings/mine`, {
+            method: "GET",
+            headers: { "Authorization": `Bearer ${token}` }
+        }, "Unable to load bookings.");
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(
-                data.message || data.title || "Unable to load bookings."
-            );
-        }
-
-        const bookings = data.bookings || [];
+        const bookings = data.bookings || (Array.isArray(data) ? data : []);
 
         if (bookings.length === 0) {
             resultDiv.innerHTML = "<p>No bookings found for your account.</p>";
@@ -293,16 +341,16 @@ async function loadMyBookings() {
             const card = document.createElement("div");
             card.className = "my-booking-card";
 
-            const bookingId = booking.bookingId ?? booking.BookingId;
-            const passengerName = booking.passengerName ?? booking.PassengerName;
-            const train = booking.trainName ?? booking.TrainName;
-            const trainNumber = booking.trainNumber ?? booking.TrainNumber;
-            const source = booking.sourceStation ?? booking.SourceStation;
-            const destination = booking.destinationStation ?? booking.DestinationStation;
-            const seat = booking.seatNumber ?? booking.SeatNumber;
-            const fare = booking.fare ?? booking.Fare;
-            const status = booking.status ?? booking.Status;
-            const date = booking.bookingDate ?? booking.BookingDate;
+            const bookingId = pick(booking, "bookingId", "BookingId");
+            const passengerName = pick(booking, "passengerName", "PassengerName");
+            const train = pick(booking, "trainName", "TrainName");
+            const trainNumber = pick(booking, "trainNumber", "TrainNumber");
+            const source = pick(booking, "sourceStation", "SourceStation");
+            const destination = pick(booking, "destinationStation", "DestinationStation");
+            const seat = pick(booking, "seatNumber", "SeatNumber");
+            const fare = pick(booking, "fare", "Fare");
+            const status = pick(booking, "status", "Status");
+            const date = pick(booking, "bookingDate", "BookingDate");
 
             card.innerHTML = `
                 <h3>${escapeHTML(train)} (${escapeHTML(trainNumber)})</h3>
@@ -319,14 +367,11 @@ async function loadMyBookings() {
 
             if (String(status).toLowerCase() === "confirmed") {
                 const cancelButton = document.createElement("button");
-
                 cancelButton.textContent = "Cancel Ticket";
                 cancelButton.className = "cancel-ticket-btn";
-
                 cancelButton.addEventListener("click", () => {
                     cancelBooking(bookingId, passenger.email);
                 });
-
                 card.appendChild(cancelButton);
             }
 
@@ -339,10 +384,7 @@ async function loadMyBookings() {
     }
 }
 
-
-// Cancel booking securely using JWT
 async function cancelBooking(bookingId, email) {
-
     const token = sessionStorage.getItem("railwayToken");
 
     if (!token) {
@@ -350,36 +392,16 @@ async function cancelBooking(bookingId, email) {
         return;
     }
 
-    const confirmed = confirm(
-        `Are you sure you want to cancel Booking ID ${bookingId}?`
-    );
-
-    if (!confirmed) {
-        return;
-    }
+    if (!confirm(`Are you sure you want to cancel Booking ID ${bookingId}?`)) return;
 
     try {
-        const response = await fetch(
-            `${API_BASE}/BookingManagement/cancel/${bookingId}`,
-            {
-                method: "PUT",
-                headers: {
-                    "Authorization": `Bearer ${token}`
-                }
-            }
-        );
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(
-                result.message || result.title || "Ticket cancellation failed."
-            );
-        }
+        await apiRequest(`${API_BASE}/BookingManagement/cancel/${bookingId}`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${token}` }
+        }, "Ticket cancellation failed.");
 
         alert("Your ticket has been cancelled successfully!");
-
-        document.getElementById("searchEmail").value = email;
+        $("searchEmail").value = email;
         await loadMyBookings();
 
     } catch (error) {
@@ -388,58 +410,38 @@ async function cancelBooking(bookingId, email) {
     }
 }
 
-        // Refresh booking history
-       
-
-
 // ==================================
-// ADMIN LOGIN WITH JWT
+// ADMIN LOGIN / LOGOUT
 // ==================================
 
-const adminLoginForm = document.getElementById("adminLoginForm");
-const adminLoginMessage = document.getElementById("adminLoginMessage");
-const adminAuthBox = document.getElementById("adminAuthBox");
-const adminPanel = document.getElementById("adminPanel");
-const adminLogoutBtn = document.getElementById("adminLogoutBtn");
+const adminLoginForm = $("adminLoginForm");
+const adminLoginMessage = $("adminLoginMessage");
+const adminAuthBox = $("adminAuthBox");
+const adminPanel = $("adminPanel");
+const adminLogoutBtn = $("adminLogoutBtn");
 
 function showAdminAccount() {
     const token = sessionStorage.getItem("railwayAdminToken");
-
-    if (token) {
-        adminAuthBox.style.display = "none";
-        adminPanel.style.display = "block";
-    } else {
-        adminAuthBox.style.display = "block";
-        adminPanel.style.display = "none";
-    }
+    adminAuthBox.style.display = token ? "none" : "block";
+    adminPanel.style.display = token ? "block" : "none";
 }
 
-// ADMIN LOGIN
-adminLoginForm.addEventListener("submit", async function(event) {
+adminLoginForm.addEventListener("submit", async function (event) {
     event.preventDefault();
 
     const loginData = {
-        email: document.getElementById("adminEmail").value.trim(),
-        password: document.getElementById("adminPassword").value
+        email: $("adminEmail").value.trim(),
+        password: $("adminPassword").value
     };
 
     try {
-        adminLoginMessage.textContent = "Checking admin credentials...";
-        adminLoginMessage.style.color = "#17243b";
+        showMsg(adminLoginMessage, "Checking admin credentials...", "#17243b");
 
-        const response = await fetch(`${API_BASE}/AdminAuth/login`, {
+        const result = await apiRequest(`${API_BASE}/AdminAuth/login`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(loginData)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.message || "Admin login failed.");
-        }
+        }, "Admin login failed.");
 
         if (!result.token || result.role !== "Admin") {
             throw new Error("Valid admin token was not received.");
@@ -447,44 +449,34 @@ adminLoginForm.addEventListener("submit", async function(event) {
 
         sessionStorage.setItem("railwayAdminToken", result.token);
 
-        adminLoginMessage.textContent = "Admin login successful!";
-        adminLoginMessage.style.color = "green";
-
+        showMsg(adminLoginMessage, "Admin login successful!", "green");
         adminLoginForm.reset();
         showAdminAccount();
 
     } catch (error) {
-        adminLoginMessage.textContent = error.message;
-        adminLoginMessage.style.color = "red";
+        showMsg(adminLoginMessage, error.message, "red");
         console.error("ADMIN LOGIN ERROR:", error);
     }
 });
 
-// ADMIN LOGOUT
-adminLogoutBtn.addEventListener("click", function() {
+adminLogoutBtn.addEventListener("click", function () {
     sessionStorage.removeItem("railwayAdminToken");
-
     showAdminAccount();
-
-    adminLoginMessage.textContent = "Admin logged out successfully.";
-    adminLoginMessage.style.color = "green";
+    showMsg(adminLoginMessage, "Admin logged out successfully.", "green");
 });
 
 // ==================================
-// ADMIN DASHBOARD WITH JWT
+// ADMIN DASHBOARD
 // ==================================
 
-const loadAdminBtn = document.getElementById("loadAdminBtn");
-
+const loadAdminBtn = $("loadAdminBtn");
 loadAdminBtn.addEventListener("click", loadAdminDashboard);
 
 async function loadAdminDashboard() {
-    const token = sessionStorage.getItem("railwayAdminToken");
+    const statsDiv = $("adminStats");
+    const bookingsDiv = $("adminBookings");
 
-    const statsDiv = document.getElementById("adminStats");
-    const bookingsDiv = document.getElementById("adminBookings");
-
-    if (!token) {
+    if (!sessionStorage.getItem("railwayAdminToken")) {
         alert("Please login as Admin first.");
         showAdminAccount();
         return;
@@ -492,68 +484,33 @@ async function loadAdminDashboard() {
 
     statsDiv.innerHTML = "<p>Loading dashboard...</p>";
     bookingsDiv.innerHTML = "<p>Loading bookings...</p>";
-
     loadAdminBtn.disabled = true;
     loadAdminBtn.textContent = "Loading...";
 
     try {
-        const headers = {
-            "Authorization": `Bearer ${token}`
-        };
-
-        const [statsResponse, bookingsResponse] = await Promise.all([
-            fetch(`${API_BASE}/Admin/dashboard`, { headers }),
-            fetch(`${API_BASE}/Admin/all-bookings`, { headers })
+        const [statsData, bookingsData] = await Promise.all([
+            adminRequest(`${API_BASE}/Admin/dashboard`, "GET", null, "Unable to load dashboard."),
+            adminRequest(`${API_BASE}/Admin/all-bookings`, "GET", null, "Unable to load bookings.")
         ]);
 
-        if (
-            statsResponse.status === 401 ||
-            statsResponse.status === 403 ||
-            bookingsResponse.status === 401 ||
-            bookingsResponse.status === 403
-        ) {
-            throw new Error("Admin session expired or unauthorized. Please login again.");
-        }
+        const stats = statsData.statistics || statsData.Statistics || {};
 
-        if (!statsResponse.ok || !bookingsResponse.ok) {
-            throw new Error("Unable to load admin data.");
-        }
+        const cards = [
+            ["Total Trains", pick(stats, "totalTrains", "TotalTrains")],
+            ["Total Schedules", pick(stats, "totalSchedules", "TotalSchedules")],
+            ["Total Bookings", pick(stats, "totalBookings", "TotalBookings")],
+            ["Confirmed Bookings", pick(stats, "confirmedBookings", "ConfirmedBookings")],
+            ["Cancelled Bookings", pick(stats, "cancelledBookings", "CancelledBookings")]
+        ];
 
-        const statsData = await statsResponse.json();
-        const bookingsData = await bookingsResponse.json();
-
-        const stats = statsData.statistics || {};
-
-        const totalTrains = stats.totalTrains ?? stats.TotalTrains ?? 0;
-        const totalSchedules = stats.totalSchedules ?? stats.TotalSchedules ?? 0;
-        const totalBookings = stats.totalBookings ?? stats.TotalBookings ?? 0;
-        const confirmed = stats.confirmedBookings ?? stats.ConfirmedBookings ?? 0;
-        const cancelled = stats.cancelledBookings ?? stats.CancelledBookings ?? 0;
-
-        statsDiv.innerHTML = `
+        statsDiv.innerHTML = cards.map(([label, value]) => `
             <div class="stat-card">
-                <h3>Total Trains</h3>
-                <p>${escapeHTML(totalTrains)}</p>
+                <h3>${label}</h3>
+                <p>${escapeHTML(value ?? 0)}</p>
             </div>
-            <div class="stat-card">
-                <h3>Total Schedules</h3>
-                <p>${escapeHTML(totalSchedules)}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Total Bookings</h3>
-                <p>${escapeHTML(totalBookings)}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Confirmed Bookings</h3>
-                <p>${escapeHTML(confirmed)}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Cancelled Bookings</h3>
-                <p>${escapeHTML(cancelled)}</p>
-            </div>
-        `;
+        `).join("");
 
-        const bookings = bookingsData.bookings || [];
+        const bookings = bookingsData.bookings || (Array.isArray(bookingsData) ? bookingsData : []);
 
         if (bookings.length === 0) {
             bookingsDiv.innerHTML = "<p>No booking records found.</p>";
@@ -561,9 +518,7 @@ async function loadAdminDashboard() {
         }
 
         const rows = bookings.map(booking => {
-            const get = (lower, upper) =>
-                booking[lower] ?? booking[upper] ?? "";
-
+            const get = (lower, upper) => pick(booking, lower, upper) ?? "";
             const bookingId = get("bookingId", "BookingId");
 
             return `
@@ -576,7 +531,10 @@ async function loadAdminDashboard() {
                     <td>${escapeHTML(get("destinationStation", "DestinationStation"))}</td>
                     <td>${escapeHTML(get("seatNumber", "SeatNumber"))}</td>
                     <td>${escapeHTML(get("status", "Status"))}</td>
-                    
+                    <td>
+                        <button type="button" class="admin-delete-btn"
+                                data-booking-id="${escapeHTML(bookingId)}">Delete</button>
+                    </td>
                 </tr>
             `;
         }).join("");
@@ -593,62 +551,34 @@ async function loadAdminDashboard() {
                         <th>To</th>
                         <th>Seat</th>
                         <th>Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
             </table>
         `;
 
-        // Delete button functionality
         bookingsDiv.querySelectorAll(".admin-delete-btn").forEach(button => {
             button.addEventListener("click", async () => {
-
                 const bookingId = button.dataset.bookingId;
 
-                const confirmDelete = confirm(
-                    `Are you sure you want to permanently delete Booking #${bookingId}?`
-                );
-
-                if (!confirmDelete) return;
+                if (!confirm(`Are you sure you want to permanently delete Booking #${bookingId}?`)) return;
 
                 button.disabled = true;
                 button.textContent = "Deleting...";
 
                 try {
-                    const response = await fetch(
-                        `${API_BASE}/Admin/delete-booking/${bookingId}`,
-                        {
-                            method: "DELETE",
-                            headers: {
-                                "Authorization": `Bearer ${token}`
-                            }
-                        }
+                    const result = await adminRequest(
+                        `${API_BASE}/Admin/delete-booking/${encodeURIComponent(bookingId)}`,
+                        "DELETE", null, "Unable to delete booking."
                     );
 
-                    const resultText = await response.text();
-
-                    let result = {};
-                    try {
-                        result = resultText ? JSON.parse(resultText) : {};
-                    } catch {
-                        result = { message: resultText };
-                    }
-
-                    if (!response.ok) {
-                        throw new Error(
-                            result.message || "Unable to delete booking."
-                        );
-                    }
-
                     alert(result.message || "Booking deleted successfully!");
-
-                    // Refresh dashboard and bookings
                     await loadAdminDashboard();
 
                 } catch (error) {
                     alert(error.message);
                     console.error("DELETE BOOKING ERROR:", error);
-
                     button.disabled = false;
                     button.textContent = "Delete";
                 }
@@ -658,12 +588,6 @@ async function loadAdminDashboard() {
     } catch (error) {
         statsDiv.innerHTML = `<p>${escapeHTML(error.message)}</p>`;
         bookingsDiv.innerHTML = "<p>Could not load booking records.</p>";
-
-        if (error.message.includes("session expired")) {
-            sessionStorage.removeItem("railwayAdminToken");
-            showAdminAccount();
-        }
-
         console.error("ADMIN DASHBOARD ERROR:", error);
 
     } finally {
@@ -671,130 +595,177 @@ async function loadAdminDashboard() {
         loadAdminBtn.textContent = "Load Dashboard";
     }
 }
-// Restore admin login display
+
 showAdminAccount();
 
+// ==================================
+// ADMIN TRAIN MANAGEMENT
+// NOTE: Change these ids if your HTML uses different ones.
+// ==================================
 
-// Add or update train
-trainForm.addEventListener("submit", async function(event) {
-    event.preventDefault();
+const TRAIN_IDS = {
+    form: "trainForm",
+    message: "trainMessage",
+    editId: "editTrainId",
+    name: "trainName",
+    number: "trainNumber",
+    seats: "totalSeats",
+    saveBtn: "saveTrainBtn",
+    records: "trainRecords",
+    loadBtn: "loadTrainsBtn"
+};
 
-    const trainId = document.getElementById("editTrainId").value;
+const trainForm = $(TRAIN_IDS.form);
+const trainMessage = $(TRAIN_IDS.message);
+const trainRecords = $(TRAIN_IDS.records);
 
-    const trainData = {
-        trainName: document.getElementById("trainName").value.trim(),
-        trainNumber: document.getElementById("trainNumber").value.trim(),
-        totalSeats: Number(document.getElementById("totalSeats").value)
-    };
+async function loadTrains() {
+    if (!trainRecords) return;
 
-    if (trainData.totalSeats < 1) {
-        trainMessage.textContent = "Total seats must be at least 1.";
-        trainMessage.style.color = "red";
-        return;
-    }
-
-    const url = trainId
-        ? `${API_BASE}/Train/${trainId}`
-        : `${API_BASE}/Train`;
-
-    const method = trainId ? "PUT" : "POST";
+    trainRecords.innerHTML = "<p>Loading trains...</p>";
 
     try {
-        const response = await fetch(url, {
-            method: method,
-           headers: getAdminHeaders(true),
-            body: JSON.stringify(trainData)
+        const data = await apiRequest(`${API_BASE}/Train`, {}, "Could not load trains.");
+        const trains = Array.isArray(data) ? data : (data.trains || data.Trains || []);
+
+        if (trains.length === 0) {
+            trainRecords.innerHTML = "<p>No trains found.</p>";
+            return;
+        }
+
+        trainRecords.innerHTML = "";
+
+        trains.forEach(train => {
+            const id = pick(train, "trainId", "TrainId", "trainid");
+            const name = pick(train, "trainName", "TrainName", "trainname") ?? "";
+            const number = pick(train, "trainNumber", "TrainNumber", "trainnumber") ?? "";
+            const seats = pick(train, "totalSeats", "TotalSeats", "totalseats") ?? "";
+
+            const card = document.createElement("div");
+            card.className = "train-record-card";
+            card.innerHTML = `
+                <h4>${escapeHTML(name)} (${escapeHTML(number)})</h4>
+                <p><strong>Train ID:</strong> ${escapeHTML(id)}</p>
+                <p><strong>Total Seats:</strong> ${escapeHTML(seats)}</p>
+                <button type="button" class="train-edit-btn">Edit</button>
+                <button type="button" class="train-delete-btn">Delete</button>
+            `;
+
+            card.querySelector(".train-edit-btn").addEventListener("click", () => {
+                $(TRAIN_IDS.editId).value = id;
+                $(TRAIN_IDS.name).value = name;
+                $(TRAIN_IDS.number).value = number;
+                $(TRAIN_IDS.seats).value = seats;
+                $(TRAIN_IDS.saveBtn).textContent = "Update Train";
+                showMsg(trainMessage, "Editing train ID: " + id, "");
+                trainForm.scrollIntoView({ behavior: "smooth" });
+            });
+
+            card.querySelector(".train-delete-btn").addEventListener("click", () => {
+                deleteTrain(id);
+            });
+
+            trainRecords.appendChild(card);
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || "Train operation failed.");
+    } catch (error) {
+        trainRecords.innerHTML = `<p>${escapeHTML(error.message)}</p>`;
+    }
+}
+
+if ($(TRAIN_IDS.loadBtn)) {
+    $(TRAIN_IDS.loadBtn).addEventListener("click", loadTrains);
+}
+
+if (trainForm) {
+    trainForm.addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        const trainId = $(TRAIN_IDS.editId).value;
+
+        const trainData = {
+            trainName: $(TRAIN_IDS.name).value.trim(),
+            trainNumber: $(TRAIN_IDS.number).value.trim(),
+            totalSeats: Number($(TRAIN_IDS.seats).value)
+        };
+
+        if (!trainData.trainName || !trainData.trainNumber) {
+            showMsg(trainMessage, "Please fill in train name and number.", "red");
+            return;
         }
 
-        trainMessage.textContent = trainId
-            ? "Train updated successfully!"
-            : "New train added successfully!";
+        if (!(trainData.totalSeats >= 1)) {
+            showMsg(trainMessage, "Total seats must be at least 1.", "red");
+            return;
+        }
 
-        trainMessage.style.color = "green";
+        try {
+            await adminRequest(
+                trainId ? `${API_BASE}/Train/${trainId}` : `${API_BASE}/Train`,
+                trainId ? "PUT" : "POST",
+                trainData,
+                "Train operation failed."
+            );
 
-        resetTrainForm();
-        await loadTrains();
+            showMsg(
+                trainMessage,
+                trainId ? "Train updated successfully!" : "New train added successfully!",
+                "green"
+            );
 
-    } catch (error) {
-        trainMessage.textContent = error.message;
-        trainMessage.style.color = "red";
-        console.error(error);
-    }
-});
+            resetTrainForm();
+            await loadTrains();
 
-// Delete train
+        } catch (error) {
+            showMsg(trainMessage, error.message, "red");
+            console.error(error);
+        }
+    });
+}
+
 async function deleteTrain(trainId) {
-    if (!confirm(`Are you sure you want to delete Train ID ${trainId}?`)) {
-        return;
-    }
+    if (!confirm(`Are you sure you want to delete Train ID ${trainId}?`)) return;
 
     try {
-        const response = await fetch(
-            `${API_BASE}/Train/${trainId}`,
-           {
-    method: "DELETE",
-    headers: getAdminHeaders()
-}
-        );
+        await adminRequest(`${API_BASE}/Train/${trainId}`, "DELETE", null, "Unable to delete train.");
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || "Unable to delete train.");
-        }
-
-        trainMessage.textContent = "Train deleted successfully!";
-        trainMessage.style.color = "green";
-
+        showMsg(trainMessage, "Train deleted successfully!", "green");
         await loadTrains();
 
     } catch (error) {
-        trainMessage.textContent = error.message;
-        trainMessage.style.color = "red";
+        showMsg(trainMessage, error.message, "red");
         console.error(error);
     }
 }
 
-// Clear form
 function resetTrainForm() {
+    if (!trainForm) return;
     trainForm.reset();
-    document.getElementById("editTrainId").value = "";
-    document.getElementById("saveTrainBtn").textContent = "Add Train";
+    $(TRAIN_IDS.editId).value = "";
+    $(TRAIN_IDS.saveBtn).textContent = "Add Train";
 }
+
 // ==================================
 // ADMIN SCHEDULE MANAGEMENT
 // ==================================
 
-const managementForm = document.getElementById("scheduleManagementForm");
-const managementRecords = document.getElementById("managementScheduleRecords");
-const managementMessage = document.getElementById("managementScheduleMessage");
+const managementForm = $("scheduleManagementForm");
+const managementRecords = $("managementScheduleRecords");
+const managementMessage = $("managementScheduleMessage");
 
-document.getElementById("managementLoadBtn").addEventListener("click", loadManagementSchedules);
-
-document.getElementById("managementClearBtn").addEventListener("click", clearManagementScheduleForm);
-
+$("managementLoadBtn").addEventListener("click", loadManagementSchedules);
+$("managementClearBtn").addEventListener("click", clearManagementScheduleForm);
 managementForm.addEventListener("submit", saveManagementSchedule);
 
-
-// LOAD ALL SCHEDULES
 async function loadManagementSchedules() {
     managementRecords.innerHTML = "<p>Loading schedules...</p>";
 
     try {
-        const response = await fetch(`${API_BASE}/ScheduleManagement`);
-        const responseText = await response.text();
-        let data = {};
-        try { data = responseText ? JSON.parse(responseText) : {}; }
-        catch { data = { message: responseText }; }
+        // Send token if admin is logged in (works for both public and protected GET)
+        const token = sessionStorage.getItem("railwayAdminToken");
+        const options = token ? { headers: { "Authorization": `Bearer ${token}` } } : {};
 
-        if (!response.ok) {
-            throw new Error(data.message || data.title || `Could not load schedules (HTTP ${response.status}).`);
-        }
-
+        const data = await apiRequest(`${API_BASE}/ScheduleManagement`, options, "Could not load schedules.");
         const schedules = Array.isArray(data) ? data : [];
 
         if (schedules.length === 0) {
@@ -805,19 +776,18 @@ async function loadManagementSchedules() {
         managementRecords.innerHTML = "";
 
         schedules.forEach(schedule => {
-            // PostgreSQL folds unquoted SQL aliases to lowercase. Support both
-            // lowercase Dapper keys and normal camelCase/PascalCase JSON keys.
-            const id = schedule.scheduleId ?? schedule.ScheduleId ?? schedule.scheduleid;
-            const train = schedule.trainName ?? schedule.TrainName ?? schedule.trainname;
-            const number = schedule.trainNumber ?? schedule.TrainNumber ?? schedule.trainnumber;
-            const source = schedule.sourceStation ?? schedule.SourceStation ?? schedule.sourcestation;
-            const destination = schedule.destinationStation ?? schedule.DestinationStation ?? schedule.destinationstation;
-            const fare = schedule.fare ?? schedule.Fare;
-            const departure = schedule.departureTime ?? schedule.DepartureTime ?? schedule.departuretime;
-            const arrival = schedule.arrivalTime ?? schedule.ArrivalTime ?? schedule.arrivaltime;
-            const trainId = schedule.trainId ?? schedule.TrainId ?? schedule.trainid;
-            const sourceId = schedule.sourceStationId ?? schedule.SourceStationId ?? schedule.sourcestationid;
-            const destinationId = schedule.destinationStationId ?? schedule.DestinationStationId ?? schedule.destinationstationid;
+            // PostgreSQL may return lowercase keys; support all variants
+            const id = pick(schedule, "scheduleId", "ScheduleId", "scheduleid");
+            const train = pick(schedule, "trainName", "TrainName", "trainname");
+            const number = pick(schedule, "trainNumber", "TrainNumber", "trainnumber");
+            const source = pick(schedule, "sourceStation", "SourceStation", "sourcestation");
+            const destination = pick(schedule, "destinationStation", "DestinationStation", "destinationstation");
+            const fare = pick(schedule, "fare", "Fare");
+            const departure = pick(schedule, "departureTime", "DepartureTime", "departuretime");
+            const arrival = pick(schedule, "arrivalTime", "ArrivalTime", "arrivaltime");
+            const trainId = pick(schedule, "trainId", "TrainId", "trainid");
+            const sourceId = pick(schedule, "sourceStationId", "SourceStationId", "sourcestationid");
+            const destinationId = pick(schedule, "destinationStationId", "DestinationStationId", "destinationstationid");
 
             if (id === undefined || id === null || id === "") {
                 console.error("Schedule record has no ID:", schedule);
@@ -826,24 +796,20 @@ async function loadManagementSchedules() {
 
             const card = document.createElement("div");
             card.className = "management-schedule-card";
-
             card.innerHTML = `
-                <h4>${escapeHTML(String(train ?? "Train"))} (${escapeHTML(String(number ?? ""))})</h4>
-                <p><strong>Schedule ID:</strong> ${id}</p>
-                <p><strong>Route:</strong> ${escapeHTML(String(source ?? ""))} → ${escapeHTML(String(destination ?? ""))}</p>
-                <p><strong>Departure:</strong> ${formatDate(departure)}</p>
-                <p><strong>Arrival:</strong> ${formatDate(arrival)}</p>
-                <p><strong>Fare:</strong> Rs. ${fare}</p>
+                <h4>${escapeHTML(train ?? "Train")} (${escapeHTML(number ?? "")})</h4>
+                <p><strong>Schedule ID:</strong> ${escapeHTML(id)}</p>
+                <p><strong>Route:</strong> ${escapeHTML(source ?? "")} → ${escapeHTML(destination ?? "")}</p>
+                <p><strong>Departure:</strong> ${escapeHTML(formatDate(departure))}</p>
+                <p><strong>Arrival:</strong> ${escapeHTML(formatDate(arrival))}</p>
+                <p><strong>Fare:</strong> Rs. ${escapeHTML(fare ?? "")}</p>
 
                 <button class="management-edit-btn" type="button">Edit</button>
                 <button class="management-delete-btn" type="button">Delete</button>
             `;
 
             card.querySelector(".management-edit-btn").addEventListener("click", () => {
-                editManagementSchedule({
-                    id, trainId, sourceId, destinationId,
-                    departure, arrival, fare
-                });
+                editManagementSchedule({ id, trainId, sourceId, destinationId, departure, arrival, fare });
             });
 
             card.querySelector(".management-delete-btn").addEventListener("click", () => {
@@ -858,158 +824,122 @@ async function loadManagementSchedules() {
     }
 }
 
-
-// ADD OR UPDATE SCHEDULE
 async function saveManagementSchedule(event) {
     event.preventDefault();
 
-    const id = document.getElementById("managementScheduleId").value;
+    const id = $("managementScheduleId").value;
 
     const scheduleData = {
-        trainId: Number(document.getElementById("managementTrainId").value),
-        sourceStationId: Number(document.getElementById("managementSourceId").value),
-        destinationStationId: Number(document.getElementById("managementDestinationId").value),
-        departureTime: document.getElementById("managementDeparture").value,
-        arrivalTime: document.getElementById("managementArrival").value,
-        fare: Number(document.getElementById("managementFare").value)
+        trainId: Number($("managementTrainId").value),
+        sourceStationId: Number($("managementSourceId").value),
+        destinationStationId: Number($("managementDestinationId").value),
+        departureTime: $("managementDeparture").value,
+        arrivalTime: $("managementArrival").value,
+        fare: Number($("managementFare").value)
     };
 
     if (scheduleData.sourceStationId === scheduleData.destinationStationId) {
-        managementMessage.textContent = "Source and destination must be different.";
+        showMsg(managementMessage, "Source and destination must be different.", "red");
+        return;
+    }
+
+    if (!scheduleData.departureTime || !scheduleData.arrivalTime) {
+        showMsg(managementMessage, "Please select departure and arrival time.", "red");
         return;
     }
 
     if (new Date(scheduleData.departureTime) >= new Date(scheduleData.arrivalTime)) {
-        managementMessage.textContent = "Arrival must be after departure.";
+        showMsg(managementMessage, "Arrival must be after departure.", "red");
         return;
     }
 
     try {
-        const url = id
-            ? `${API_BASE}/ScheduleManagement/${id}`
-            : `${API_BASE}/ScheduleManagement`;
+        await adminRequest(
+            id ? `${API_BASE}/ScheduleManagement/${id}` : `${API_BASE}/ScheduleManagement`,
+            id ? "PUT" : "POST",
+            scheduleData,
+            "Schedule operation failed."
+        );
 
-        const response = await fetch(url, {
-            method: id ? "PUT" : "POST",
-           headers: getAdminHeaders(true),
-            body: JSON.stringify(scheduleData)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.message || result.title || "Schedule operation failed.");
-        }
-
-        managementMessage.textContent = id
-            ? "Schedule updated successfully!"
-            : "Schedule added successfully!";
+        showMsg(
+            managementMessage,
+            id ? "Schedule updated successfully!" : "Schedule added successfully!",
+            "green"
+        );
 
         clearManagementScheduleForm();
         await loadManagementSchedules();
 
     } catch (error) {
-        managementMessage.textContent = error.message;
+        showMsg(managementMessage, error.message, "red");
+        console.error("SAVE SCHEDULE ERROR:", error);
     }
 }
 
-
-// EDIT SCHEDULE
 function editManagementSchedule(schedule) {
-    document.getElementById("managementScheduleId").value = schedule.id;
-    document.getElementById("managementTrainId").value = schedule.trainId;
-    document.getElementById("managementSourceId").value = schedule.sourceId;
-    document.getElementById("managementDestinationId").value = schedule.destinationId;
-    document.getElementById("managementDeparture").value =
-        new Date(schedule.departure).toISOString().slice(0, 16);
-    document.getElementById("managementArrival").value =
-        new Date(schedule.arrival).toISOString().slice(0, 16);
-    document.getElementById("managementFare").value = schedule.fare;
+    $("managementScheduleId").value = schedule.id;
+    $("managementTrainId").value = schedule.trainId ?? "";
+    $("managementSourceId").value = schedule.sourceId ?? "";
+    $("managementDestinationId").value = schedule.destinationId ?? "";
+    $("managementDeparture").value = toLocalInput(schedule.departure);
+    $("managementArrival").value = toLocalInput(schedule.arrival);
+    $("managementFare").value = schedule.fare ?? "";
 
-    document.getElementById("managementSaveBtn").textContent = "Update Schedule";
-    managementMessage.textContent = "Editing schedule ID: " + schedule.id;
+    $("managementSaveBtn").textContent = "Update Schedule";
+    showMsg(managementMessage, "Editing schedule ID: " + schedule.id, "");
 
     managementForm.scrollIntoView({ behavior: "smooth" });
 }
 
-
-// DELETE SCHEDULE
 async function deleteManagementSchedule(id) {
-    // Never send /ScheduleManagement/undefined (it returns HTTP 404).
     if (id === undefined || id === null || String(id).trim() === "") {
-        managementMessage.textContent = "Schedule ID is missing. Reload schedules and try again.";
-        console.error("Cannot delete schedule: missing ID", id);
+        showMsg(managementMessage, "Schedule ID is missing. Reload schedules and try again.", "red");
         return;
     }
 
-    if (!confirm(`Are you sure you want to delete schedule ID ${id}?`)) {
-        return;
-    }
+    if (!confirm(`Are you sure you want to delete schedule ID ${id}?`)) return;
 
     try {
-        const response = await fetch(`${API_BASE}/ScheduleManagement/${encodeURIComponent(id)}`, {
-            method: "DELETE",
-            headers: getAdminHeaders()
-        });
+        await adminRequest(
+            `${API_BASE}/ScheduleManagement/${encodeURIComponent(id)}`,
+            "DELETE", null, "Could not delete schedule."
+        );
 
-        const responseText = await response.text();
-        let result = {};
-        try { result = responseText ? JSON.parse(responseText) : {}; }
-        catch { result = { message: responseText }; }
-
-        if (!response.ok) {
-            throw new Error(
-                result.message || result.title ||
-                (response.status === 404
-                    ? `Schedule ID ${id} was not found. Refresh the schedule list and check the ID.`
-                    : `Could not delete schedule (HTTP ${response.status}).`)
-            );
-        }
-
-        managementMessage.textContent = `Schedule ID ${id} deleted successfully!`;
+        showMsg(managementMessage, `Schedule ID ${id} deleted successfully!`, "green");
         await loadManagementSchedules();
 
     } catch (error) {
-        managementMessage.textContent = error.message;
+        showMsg(managementMessage, error.message, "red");
         console.error("DELETE SCHEDULE ERROR:", error);
     }
 }
 
-
-// CLEAR FORM
 function clearManagementScheduleForm() {
     managementForm.reset();
-    document.getElementById("managementScheduleId").value = "";
-    document.getElementById("managementSaveBtn").textContent = "Add Schedule";
-}// ==================================
+    $("managementScheduleId").value = "";
+    $("managementSaveBtn").textContent = "Add Schedule";
+}
+
+// ==================================
 // ADMIN STATION MANAGEMENT
 // ==================================
 
-const stationForm = document.getElementById("stationForm");
-const stationRecords = document.getElementById("stationRecords");
-const stationMessage = document.getElementById("stationMessage");
+const stationForm = $("stationForm");
+const stationRecords = $("stationRecords");
+const stationMessage = $("stationMessage");
 
-document.getElementById("loadStationsBtn")
-    .addEventListener("click", loadStations);
-
-document.getElementById("resetStationBtn")
-    .addEventListener("click", clearStationForm);
-
+$("loadStationsBtn").addEventListener("click", loadStations);
+$("resetStationBtn").addEventListener("click", clearStationForm);
 stationForm.addEventListener("submit", saveStation);
 
-
-// LOAD STATIONS
 async function loadStations() {
     stationRecords.innerHTML = "<p>Loading stations...</p>";
 
     try {
-        const response = await fetch(`${API_BASE}/StationManagement`);
-        const data = await response.json();
+        const token = sessionStorage.getItem("railwayAdminToken");
+        const options = token ? { headers: { "Authorization": `Bearer ${token}` } } : {};
 
-        if (!response.ok) {
-            throw new Error(data.message || "Could not load stations.");
-        }
-
+        const data = await apiRequest(`${API_BASE}/StationManagement`, options, "Could not load stations.");
         const stations = Array.isArray(data) ? data : [];
 
         if (stations.length === 0) {
@@ -1020,287 +950,202 @@ async function loadStations() {
         stationRecords.innerHTML = "";
 
         stations.forEach(station => {
-            const id = station.stationId ?? station.StationId;
-            const name = station.stationName ?? station.StationName;
-            const city = station.city ?? station.City;
+            const id = pick(station, "stationId", "StationId", "stationid");
+            const name = pick(station, "stationName", "StationName", "stationname");
+            const city = pick(station, "city", "City");
 
             const card = document.createElement("div");
             card.className = "station-record-card";
-
             card.innerHTML = `
-                <h4>${escapeHTML(String(name ?? ""))}</h4>
-                <p><strong>Station ID:</strong> ${id}</p>
-                <p><strong>City:</strong> ${escapeHTML(String(city ?? ""))}</p>
+                <h4>${escapeHTML(name ?? "")}</h4>
+                <p><strong>Station ID:</strong> ${escapeHTML(id)}</p>
+                <p><strong>City:</strong> ${escapeHTML(city ?? "")}</p>
                 <button type="button" class="station-edit-btn">Edit</button>
                 <button type="button" class="station-delete-btn">Delete</button>
             `;
 
-            card.querySelector(".station-edit-btn")
-                .addEventListener("click", () => {
-                    editStation(id, name, city);
-                });
+            card.querySelector(".station-edit-btn").addEventListener("click", () => {
+                editStation(id, name, city);
+            });
 
-            card.querySelector(".station-delete-btn")
-                .addEventListener("click", () => {
-                    deleteStation(id);
-                });
+            card.querySelector(".station-delete-btn").addEventListener("click", () => {
+                deleteStation(id);
+            });
 
             stationRecords.appendChild(card);
         });
 
     } catch (error) {
-        stationRecords.innerHTML =
-            `<p>${escapeHTML(error.message)}</p>`;
+        stationRecords.innerHTML = `<p>${escapeHTML(error.message)}</p>`;
     }
 }
 
-
-// ADD OR UPDATE STATION
 async function saveStation(event) {
     event.preventDefault();
 
-    const id = document.getElementById("editStationId").value;
+    const id = $("editStationId").value;
 
     const stationData = {
-        stationName: document.getElementById("stationName").value.trim(),
-        city: document.getElementById("stationCity").value.trim()
+        stationName: $("stationName").value.trim(),
+        city: $("stationCity").value.trim()
     };
 
     if (!stationData.stationName || !stationData.city) {
-        stationMessage.textContent = "Please fill in both fields.";
+        showMsg(stationMessage, "Please fill in both fields.", "red");
         return;
     }
 
     try {
-        const url = id
-            ? `${API_BASE}/StationManagement/${id}`
-            : `${API_BASE}/StationManagement`;
+        await adminRequest(
+            id ? `${API_BASE}/StationManagement/${id}` : `${API_BASE}/StationManagement`,
+            id ? "PUT" : "POST",
+            stationData,
+            "Station operation failed."
+        );
 
-        const response = await fetch(url, {
-            method: id ? "PUT" : "POST",
-           headers: getAdminHeaders(true),
-            body: JSON.stringify(stationData)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.message || result.title || "Station operation failed.");
-        }
-
-        stationMessage.textContent = id
-            ? "Station updated successfully!"
-            : "Station added successfully!";
+        showMsg(
+            stationMessage,
+            id ? "Station updated successfully!" : "Station added successfully!",
+            "green"
+        );
 
         clearStationForm();
         await loadStations();
 
     } catch (error) {
-        stationMessage.textContent = error.message;
+        showMsg(stationMessage, error.message, "red");
+        console.error("SAVE STATION ERROR:", error);
     }
 }
 
-
-// EDIT STATION
 function editStation(id, name, city) {
-    document.getElementById("editStationId").value = id;
-    document.getElementById("stationName").value = name;
-    document.getElementById("stationCity").value = city;
+    $("editStationId").value = id;
+    $("stationName").value = name ?? "";
+    $("stationCity").value = city ?? "";
 
-    document.getElementById("saveStationBtn").textContent = "Update Station";
-    stationMessage.textContent = "Editing station ID: " + id;
+    $("saveStationBtn").textContent = "Update Station";
+    showMsg(stationMessage, "Editing station ID: " + id, "");
 
     stationForm.scrollIntoView({ behavior: "smooth" });
 }
 
-
-// DELETE STATION
 async function deleteStation(id) {
-    if (!confirm("Are you sure you want to delete this station?")) {
-        return;
-    }
+    if (!confirm("Are you sure you want to delete this station?")) return;
 
     try {
-        const response = await fetch(
+        await adminRequest(
             `${API_BASE}/StationManagement/${id}`,
-            {
-    method: "DELETE",
-    headers: getAdminHeaders()
-} 
+            "DELETE", null, "Could not delete station."
         );
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.message || result.title || "Could not delete station.");
-        }
-
-        stationMessage.textContent = "Station deleted successfully!";
+        showMsg(stationMessage, "Station deleted successfully!", "green");
         await loadStations();
 
     } catch (error) {
-        stationMessage.textContent = error.message;
+        showMsg(stationMessage, error.message, "red");
+        console.error("DELETE STATION ERROR:", error);
     }
 }
 
-
-// CLEAR FORM
 function clearStationForm() {
     stationForm.reset();
+    $("editStationId").value = "";
+    $("saveStationBtn").textContent = "Add Station";
+}
 
-    document.getElementById("editStationId").value = "";
-    document.getElementById("saveStationBtn").textContent = "Add Station";
-}// ==================================
+// ==================================
 // PASSENGER LOGIN & REGISTRATION
 // ==================================
 
-const passengerRegisterForm =
-    document.getElementById("passengerRegisterForm");
+const passengerRegisterForm = $("passengerRegisterForm");
+const passengerLoginForm = $("passengerLoginForm");
+const registerMessage = $("registerMessage");
+const loginMessage = $("loginMessage");
 
-const passengerLoginForm =
-    document.getElementById("passengerLoginForm");
-
-const registerMessage =
-    document.getElementById("registerMessage");
-
-const loginMessage =
-    document.getElementById("loginMessage");
-
-
-// REGISTER PASSENGER
 passengerRegisterForm.addEventListener("submit", async function (event) {
     event.preventDefault();
 
     const passengerData = {
-        passengerName: document.getElementById("registerName").value.trim(),
-        email: document.getElementById("registerEmail").value.trim(),
-        password: document.getElementById("registerPassword").value
+        passengerName: $("registerName").value.trim(),
+        email: $("registerEmail").value.trim(),
+        password: $("registerPassword").value
     };
 
     try {
-        const response = await fetch(`${API_BASE}/PassengerAuth/register`, {
+        await apiRequest(`${API_BASE}/PassengerAuth/register`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(passengerData)
-        });
+        }, "Registration failed.");
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.message || "Registration failed.");
-        }
-
-        registerMessage.textContent = "Registration successful! You can now login.";
-        registerMessage.style.color = "green";
-
+        showMsg(registerMessage, "Registration successful! You can now login.", "green");
         passengerRegisterForm.reset();
-
-        document.getElementById("loginEmail").value = passengerData.email;
+        $("loginEmail").value = passengerData.email;
 
     } catch (error) {
-        registerMessage.textContent = error.message;
-        registerMessage.style.color = "red";
+        showMsg(registerMessage, error.message, "red");
     }
 });
 
-
-// LOGIN PASSENGER
-
-// LOGIN PASSENGER WITH JWT TOKEN
-
- // LOGIN PASSENGER WITH JWT TOKEN
 passengerLoginForm.addEventListener("submit", async function (event) {
     event.preventDefault();
 
     const loginData = {
-        email: document.getElementById("loginEmail").value.trim(),
-        password: document.getElementById("loginPassword").value
+        email: $("loginEmail").value.trim(),
+        password: $("loginPassword").value
     };
 
     try {
-        const response = await fetch(`${API_BASE}/PassengerAuth/login`, {
+        const result = await apiRequest(`${API_BASE}/PassengerAuth/login`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(loginData)
-        });
-
-        const result = await response.json();
-
-        console.log("LOGIN API RESPONSE:", result);
-
-        if (!response.ok) {
-            throw new Error(result.message || "Login failed.");
-        }
+        }, "Login failed.");
 
         if (!result.token) {
             throw new Error("JWT token was not received from backend.");
         }
 
-        // Save passenger profile
         sessionStorage.setItem("railwayPassenger", JSON.stringify({
             passengerId: result.passengerId,
             passengerName: result.passengerName,
             email: result.email
         }));
 
-        // Save JWT token
         sessionStorage.setItem("railwayToken", result.token);
 
-        // Verify token was saved
-        console.log("JWT TOKEN SAVED:", !!sessionStorage.getItem("railwayToken"));
-
-        loginMessage.textContent = "Login successful! Secure session started.";
-        loginMessage.style.color = "green";
-
+        showMsg(loginMessage, "Login successful! Secure session started.", "green");
         passengerLoginForm.reset();
         showPassengerAccount();
 
     } catch (error) {
-        loginMessage.textContent = error.message;
-        loginMessage.style.color = "red";
+        showMsg(loginMessage, error.message, "red");
         console.error("LOGIN ERROR:", error);
     }
 });
 
-
-// SHOW LOGGED-IN PASSENGER
 function showPassengerAccount() {
     const savedPassenger = sessionStorage.getItem("railwayPassenger");
 
     if (!savedPassenger) {
-        document.getElementById("authForms").style.display = "grid";
-        document.getElementById("loggedInPanel").style.display = "none";
+        $("authForms").style.display = "grid";
+        $("loggedInPanel").style.display = "none";
         return;
     }
 
     const passenger = JSON.parse(savedPassenger);
 
-    document.getElementById("authForms").style.display = "none";
-    document.getElementById("loggedInPanel").style.display = "block";
-
-    document.getElementById("loggedInName").textContent =
-        passenger.passengerName;
+    $("authForms").style.display = "none";
+    $("loggedInPanel").style.display = "block";
+    $("loggedInName").textContent = passenger.passengerName;
 }
 
+$("passengerLogoutBtn").addEventListener("click", function () {
+    sessionStorage.removeItem("railwayPassenger");
+    sessionStorage.removeItem("railwayToken");
 
-// LOGOUT PASSENGER
+    showPassengerAccount();
+    showMsg(loginMessage, "You have logged out successfully.", "green");
+});
 
-// LOGOUT PASSENGER
-document.getElementById("passengerLogoutBtn")
-    .addEventListener("click", function () {
-
-        sessionStorage.removeItem("railwayPassenger");
-        sessionStorage.removeItem("railwayToken");
-
-        showPassengerAccount();
-
-        loginMessage.textContent = "You have logged out successfully.";
-        loginMessage.style.color = "green";
-    });
-
-// RESTORE LOGIN DISPLAY WHEN PAGE LOADS
 showPassengerAccount();

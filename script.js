@@ -1,3 +1,125 @@
+// ==================================
+// HAMBURGER MENU FIX (ONLY NEW CODE)
+// Runs first and independently, so it works even if
+// some other part of this file has a problem later.
+// ==================================
+(function () {
+    const TOGGLE_SELECTOR = [
+        "#hamburger", "#hamburgerBtn", "#hamburger-btn", "#hamburgerMenu",
+        "#menuToggle", "#menu-toggle", "#menuBtn", "#menu-btn",
+        "#navToggle", "#nav-toggle", "#mobileMenuBtn", "#mobile-menu-btn",
+        ".hamburger", ".hamburger-menu", ".hamburger-btn",
+        ".menu-toggle", ".menu-btn", ".menu-icon",
+        ".nav-toggle", ".navbar-toggle", ".mobile-menu-btn",
+        '[aria-label*="menu" i]'
+    ].join(",");
+
+    const MENU_SELECTOR = [
+        "#navLinks", "#nav-links", "#navMenu", "#nav-menu", "#navbarMenu",
+        "#mobileMenu", "#mobile-menu", "#menu", "#sidebar", "#navList",
+        ".nav-links", ".nav-menu", ".navbar-menu", ".nav-list",
+        ".mobile-menu", ".menu", ".sidebar",
+        "header nav ul", "nav ul", "header nav", "nav"
+    ].join(",");
+
+    const OPEN_CLASSES = ["active", "open", "show", "is-open"];
+
+    function setupHamburger() {
+        const toggle = document.querySelector(TOGGLE_SELECTOR);
+        if (!toggle) return;
+
+        let menu = null;
+
+        // Use data-target / aria-controls if the button points to its menu
+        const targetId =
+            toggle.getAttribute("aria-controls") ||
+            (toggle.getAttribute("data-target") || "").replace("#", "");
+        if (targetId) menu = document.getElementById(targetId);
+
+        if (!menu) {
+            const candidates = document.querySelectorAll(MENU_SELECTOR);
+            for (const el of candidates) {
+                if (el !== toggle && !toggle.contains(el)) {
+                    menu = el;
+                    break;
+                }
+            }
+        }
+
+        if (!menu) return;
+
+        function isOpen() {
+            return OPEN_CLASSES.some(cls => menu.classList.contains(cls)) ||
+                   menu.dataset.hamburgerOpen === "1";
+        }
+
+        function setOpen(open) {
+            OPEN_CLASSES.forEach(cls => {
+                menu.classList.toggle(cls, open);
+                toggle.classList.toggle(cls, open);
+            });
+
+            menu.dataset.hamburgerOpen = open ? "1" : "0";
+            toggle.setAttribute("aria-expanded", open ? "true" : "false");
+
+            // Fallback: if CSS still keeps the menu hidden, force it visible
+            menu.style.removeProperty("display");
+            if (open && window.getComputedStyle(menu).display === "none") {
+                menu.style.display = "flex";
+                menu.style.flexDirection = "column";
+            }
+        }
+
+        function toggleMenu(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            setOpen(!isOpen());
+        }
+
+        // Avoid double toggle if the HTML already has an inline onclick
+        if (!toggle.getAttribute("onclick")) {
+            toggle.addEventListener("click", toggleMenu);
+        }
+
+        // Close menu when a link inside it is clicked
+        menu.addEventListener("click", function (event) {
+            if (event.target.closest("a")) setOpen(false);
+        });
+
+        // Close menu when clicking outside
+        document.addEventListener("click", function (event) {
+            if (isOpen() && !menu.contains(event.target) && !toggle.contains(event.target)) {
+                setOpen(false);
+            }
+        });
+
+        // Reset when screen becomes large again
+        window.addEventListener("resize", function () {
+            if (window.innerWidth > 900 && isOpen()) setOpen(false);
+        });
+
+        // In case HTML uses onclick="toggleMenu()" and similar names
+        ["toggleMenu", "toggleNav", "toggleNavbar", "toggleSidebar", "toggleHamburger", "openMenu"]
+            .forEach(name => {
+                if (typeof window[name] !== "function") {
+                    window[name] = function () { toggleMenu(); };
+                }
+            });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", setupHamburger);
+    } else {
+        setupHamburger();
+    }
+})();
+
+// ==================================
+// ORIGINAL CODE (UNCHANGED)
+// ==================================
+
 const API_BASE = "https://localhost:7163/api";
 
 // ==================================
